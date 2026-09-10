@@ -1,6 +1,6 @@
 @echo off
 title O.N.S. OUTSOURCING SOLUTIONS - diagnostic
-cd /d "%~dp0"
+cd /d "%~dp0."
 echo.
 echo  ================================================
 echo    O.N.S. OUTSOURCING SOLUTIONS - diagnostic report

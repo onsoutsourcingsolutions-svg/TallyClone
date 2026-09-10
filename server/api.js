@@ -658,7 +658,7 @@ api.post('/update/apply', async (req, res) => {
           const p = spawn('cmd.exe', ['/c', 'start', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore' });
           p.unref();
         } else {
-          const p = spawn('/bin/sh', ['-c', 'sleep 3; exec node server/run.js'],
+          const p = spawn('/bin/sh', ['-c', 'sleep 3; npm run build; exec node server/run.js'],
             { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
           p.unref();
         }

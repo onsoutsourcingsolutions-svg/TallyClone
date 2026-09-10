@@ -1,6 +1,7 @@
 @echo off
 title O.N.S. OUTSOURCING SOLUTIONS - local server
-cd /d "%~dp0"
+cd /d "%~dp0."
+rem Fix for spaces in path like ADITYA MISHRA — %~dp0. avoids trailing backslash escaping the quote
 echo.
 echo  ==================================================
 echo    O.N.S. OUTSOURCING SOLUTIONS  - starting here
