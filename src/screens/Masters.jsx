@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, useApp } from '../state.jsx';
 import { ItemExcelPanel } from './ItemExcel.jsx';
+import { StockExcelPanel } from './StockExcel.jsx';
 import { inr } from '../fmt.js';
 
 /* ---------- shared bits ---------- */
@@ -218,6 +219,7 @@ export function ItemsTab() {
       {adding && !editing && <ItemForm onSaved={() => { setAdding(false); load(); }} onCancel={() => setAdding(false)} />}
       {editing && <ItemForm edit={editing} onSaved={() => { setEditing(null); load(); }} onCancel={() => setEditing(null)} />}
       <ItemExcelPanel onImported={load} />
+      <StockExcelPanel onImported={load} />
       <div className="card">
         <div className="frow" style={{ marginBottom: 10 }}>
           <input placeholder="Search item / HSN…" value={q} onChange={(e) => setQ(e.target.value)} onKeyUp={(e) => e.key === 'Enter' && load(q)} />
