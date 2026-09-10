@@ -178,6 +178,69 @@ function parseTabular(aoa, rowsObj) {
   };
 }
 
+function parseTabularBulk(aoa, rowsObj) {
+  if (!rowsObj.length) return null;
+  const firstKeys = Object.keys(rowsObj[0]).map(normalizeKey);
+  const hasTabular = firstKeys.some(k => ['invoice_no','buyer_name','item_name','qty','quantity','rate','item'].includes(k));
+  if (!hasTabular) return null;
+  const normRows = rowsObj.map(o => {
+    const m = {};
+    for (const [k, v] of Object.entries(o)) m[normalizeKey(k)] = v;
+    return m;
+  });
+  const invoices = new Map();
+  for (const r of normRows) {
+    const invNo = N(r.invoice_no || r.invoice_number || r.number || 'INV').trim() || 'INV';
+    if (!invoices.has(invNo)) invoices.set(invNo, []);
+    invoices.get(invNo).push(r);
+  }
+  const results = [];
+  for (const [invNo, grouped] of invoices.entries()) {
+    if (!grouped.length) continue;
+    const first = grouped[0];
+    const date = parseDateAny(first.date || first.dated || first.invoice_date) || todayISO();
+    const buyer = {
+      name: N(first.buyer_name || first.party_name || first.customer_name || first.buyer || ''),
+      address: N(first.buyer_address || first.address || first.party_address || ''),
+      gstin: N(first.buyer_gstin || first.gstin || first.gst || '').toUpperCase() || extractGSTIN(first.buyer_address || ''),
+    };
+    const ship = {
+      name: N(first.ship_name || first.consignee_name || buyer.name),
+      address: N(first.ship_address || first.consignee_address || buyer.address),
+      gstin: N(first.ship_gstin || first.consignee_gstin || buyer.gstin).toUpperCase(),
+    };
+    const items = [];
+    for (const r of grouped) {
+      const name = N(r.item_name || r.description || r.description_of_goods || r.item || '');
+      if (!name) continue;
+      const qty = NUM(r.qty ?? r.quantity) || 0;
+      const rate = NUM(r.rate) || 0;
+      const hsn = N(r.hsn || r.hsn_sac || '');
+      const unit = N(r.unit || r.per || r.uom || 'KGS').toUpperCase() || 'KGS';
+      const gst_rate = NUM(r.gst_rate ?? r.gst ?? r.tax_rate) ?? null;
+      const amount = NUM(r.amount) ?? (qty * rate);
+      if (qty <= 0 || rate <= 0) continue;
+      items.push({ name, hsn, qty, unit, rate, gst_rate, amount });
+    }
+    if (!items.length) continue;
+    let regime = 'intra';
+    for (const r of grouped) {
+      if (r.igst_rate || (String(r.regime||'').toLowerCase().includes('inter'))) { regime = 'inter'; break; }
+    }
+    results.push({
+      invoice_no: N(invNo),
+      date,
+      ref: N(first.ref || first.reference_by || first.reference || ''),
+      buyer,
+      consignee: ship,
+      items,
+      regime,
+      _source: 'tabular',
+    });
+  }
+  return results.length ? results : null;
+}
+
 function parseFormatted(aoa) {
   const invLabel = findLabel(aoa, 'invoice no');
   let invoice_no = '';
@@ -463,6 +526,14 @@ export async function parseInvoiceWorkbook(buf, filename = '') {
   const aoa = X.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
   const rowsObj = X.utils.sheet_to_json(ws, { defval: '' });
 
+  // Try bulk tabular first (many invoices in one file)
+  try {
+    const bulk = parseTabularBulk(aoa, rowsObj);
+    if (bulk && bulk.length) {
+      if (bulk.length === 1) return bulk[0];
+      return bulk; // array of invoices
+    }
+  } catch (_) {}
   let parsed = null;
   try {
     parsed = parseTabular(aoa, rowsObj);
@@ -471,6 +542,12 @@ export async function parseInvoiceWorkbook(buf, filename = '') {
 
   parsed = parseFormatted(aoa);
   return parsed;
+}
+
+export async function parseInvoiceWorkbookBulk(buf, filename = '') {
+  const parsed = await parseInvoiceWorkbook(buf, filename);
+  if (Array.isArray(parsed)) return parsed;
+  return parsed ? [parsed] : [];
 }
 
 function ensureAccount(c, name, address, gstin) {
@@ -563,21 +640,18 @@ export async function exportInvoiceTemplate(c) {
   return { buf, file: `sales-invoice-template-${todayISO()}.xlsx` };
 }
 
-export async function importInvoiceExcel(c, buf, filename = '') {
-  const parsed = await parseInvoiceWorkbook(buf, filename);
+async function importOneInvoice(c, parsed, filename) {
   if (!parsed.items || !parsed.items.length) throw vErr('No items found in Excel — check that the sheet has Description, Quantity, Rate, Amount columns and at least one item row.');
   if (!parsed.date) parsed.date = todayISO();
   const de = dateInBook(c, parsed.date);
-  if (de) throw vErr(de);
+  if (de) throw vErr(`Invoice ${parsed.invoice_no}: ${de}`);
 
-  // ensure buyer and items exist (outside any voucher tx)
   const buyerAcc = ensureAccount(c, parsed.buyer.name, parsed.buyer.address, parsed.buyer.gstin);
   const itemRows = [];
   for (const it of parsed.items) {
     const dbItem = ensureItem(c, it);
     itemRows.push({ item_id: dbItem.id, qty: it.qty, rate: it.rate, dbItem });
   }
-  // ensure stock exists for each item, auto-create opening stock if needed
   for (const ir of itemRows) {
     const st = inventoryState(ir.item_id);
     if (st.qty + 1e-9 < ir.qty) {
@@ -607,6 +681,19 @@ export async function importInvoiceExcel(c, buf, filename = '') {
     auto_tax: true,
   };
   const v = createVoucher(c, payload);
-
   return { parsed, voucher: v };
+}
+
+export async function importInvoiceExcel(c, buf, filename = '') {
+  const parsed = await parseInvoiceWorkbook(buf, filename);
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  if (!list.length || !list[0].items || !list[0].items.length) throw vErr('No items found in Excel — check that the sheet has Description, Quantity, Rate, Amount columns and at least one item row.');
+
+  const results = [];
+  for (const p of list) {
+    const one = await importOneInvoice(c, p, filename);
+    results.push(one);
+  }
+  if (results.length === 1) return results[0];
+  return { parsed: list, vouchers: results.map(r => r.voucher), count: results.length };
 }

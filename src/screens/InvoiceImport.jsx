@@ -25,7 +25,8 @@ export function InvoiceImportScreen() {
         setResult(null);
       } else {
         setResult(j);
-        if (j.voucher) notify(`Sales ${j.voucher.number || '#' + j.voucher.voucher_no} booked ✓ — now you can print it.`);
+        if (j.vouchers) notify(`${j.count} sales invoices booked from Excel ✓`);
+        else if (j.voucher) notify(`Sales ${j.voucher.number || '#' + j.voucher.voucher_no} booked ✓ — now you can print it.`);
       }
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -77,6 +78,23 @@ export function InvoiceImportScreen() {
 
       {err && <div className="errbox">{err}</div>}
 
+      {preview && preview.bulk && (
+        <div className="card">
+          <h3>Preview — {preview.count} invoices found in Excel (tabular bulk)</h3>
+          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+            <table className="grid" style={{ fontSize: 12 }}>
+              <thead><tr><th>Invoice No</th><th>Date</th><th>Buyer</th><th>GSTIN</th><th>Items</th><th>Regime</th></tr></thead>
+              <tbody>{preview.bulk.map((p, i) => (
+                <tr key={i}><td>{p.invoice_no}</td><td>{p.date}</td><td>{p.buyer.name}</td><td>{p.buyer.gstin || '—'}</td><td>{p.items.length}</td><td>{p.regime}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <button className="btn" disabled={busy || !file} onClick={() => doUpload(file, false)}>{busy ? 'Booking…' : `✔ Book all ${preview.count} invoices now`}</button>
+          </div>
+        </div>
+      )}
+
       {preview && preview.parsed && (
         <div className="card">
           <h3>Preview — {preview.parsed._source === 'tabular' ? 'Tabular sheet detected' : 'Formatted PI-200 sheet detected'}</h3>
@@ -122,6 +140,20 @@ export function InvoiceImportScreen() {
           <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn" onClick={() => printVoucher(result.voucher.id)}>🖨 Invoice print (PI-200 exact)</button>
             <a className="btn ghost" href="#" onClick={(e) => { e.preventDefault(); window.location.hash = ''; }}>Open Day Book</a>
+          </div>
+        </div>
+      )}
+
+      {result && result.vouchers && (
+        <div className="card" style={{ borderColor: 'var(--gold)' }}>
+          <h3>✅ {result.count} invoices booked from Excel</h3>
+          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+            <table className="grid" style={{ fontSize: 12 }}>
+              <thead><tr><th>Invoice No</th><th>Date</th><th>Voucher ID</th><th></th></tr></thead>
+              <tbody>{result.vouchers.map((v, i) => (
+                <tr key={i}><td>{v.number || '#' + v.voucher_no}</td><td>{v.date}</td><td>{v.id}</td><td><button className="btn ghost sm" onClick={() => printVoucher(v.id)}>🖨 Print</button></td></tr>
+              ))}</tbody>
+            </table>
           </div>
         </div>
       )}

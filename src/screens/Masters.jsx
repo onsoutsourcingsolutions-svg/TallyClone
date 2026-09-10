@@ -17,6 +17,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
   const { company, notify } = useApp();
   const chart = company.chart || [];
   const [err, setErr] = useState('');
+  const [gstState, setGstState] = useState({ loading: false, data: null, error: '' });
   const [f, setF] = useState({
     name: '', group_code: 'sundry_debtors', opening_balance: '', opening_type: 'Dr',
     address: '', gstin: '', pan: '', credit_days: '', credit_limit: '',
@@ -33,6 +34,50 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
     }
     return secs;
   }, [chart]);
+
+  const verifyGst = async () => {
+    const g = String(f.gstin || '').trim().toUpperCase();
+    if (!g) { setErr('Enter GSTIN first — e.g. 27ABCDE1234F1Z5'); return; }
+    setGstState({ loading: true, data: null, error: '' });
+    setErr('');
+    try {
+      const j = await api('/gst/verify?gstin=' + encodeURIComponent(g));
+      if (!j.ok) throw new Error(j.error || 'GST verification failed');
+      setGstState({ loading: false, data: j, error: '' });
+      // auto-fill PAN from GSTIN
+      if (j.pan && !f.pan) setF(prev => ({ ...prev, pan: j.pan }));
+      // if details available, suggest auto-fill
+      if (j.details) {
+        const d = j.details;
+        if (d.trade_name || d.legal_name) {
+          notify(`GSTIN ✓ ${j.state_name || ''} — ${d.trade_name || d.legal_name} found. Click to apply.`);
+        } else {
+          notify(`GSTIN ✓ ${j.state_name} — format valid${j.verified ? '' : ' (live details unavailable offline)'}`);
+        }
+      } else {
+        notify(`GSTIN ✓ ${j.state_name} — valid. ${j.message || ''}`);
+      }
+    } catch (e) {
+      setGstState({ loading: false, data: null, error: e.message });
+      setErr(e.message);
+    }
+  };
+
+  const applyGstDetails = (useTrade = true) => {
+    const d = gstState.data;
+    if (!d) return;
+    const det = d.details || {};
+    const nameToUse = useTrade ? (det.trade_name || det.legal_name) : (det.legal_name || det.trade_name);
+    const updates = {};
+    if (nameToUse && !f.name.trim()) updates.name = nameToUse;
+    else if (nameToUse) updates.name = nameToUse; // always apply if user clicks
+    if (det.address) updates.address = det.address;
+    if (d.pan) updates.pan = d.pan;
+    if (Object.keys(updates).length) {
+      setF(prev => ({ ...prev, ...updates }));
+      notify('Auto-filled from GSTIN ✓');
+    }
+  };
 
   const save = async () => {
     setErr('');
@@ -80,8 +125,46 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
       {(f.group_code === 'sundry_debtors' || f.group_code === 'sundry_creditors') && (
         <>
           <div className="frow">
-            <label className="f"><span>Party address</span><input value={f.address} onChange={set('address')} /></label>
-            <label className="f"><span>Party GSTIN</span><input value={f.gstin} onChange={set('gstin')} /></label>
+            <label className="f" style={{ minWidth: 260 }}><span>Party GSTIN — type & Verify to auto-pull from GST portal</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input value={f.gstin} onChange={set('gstin')} placeholder="27ABCDE1234F1Z5" style={{ textTransform: 'uppercase' }} />
+                <button className="btn sm" onClick={verifyGst} disabled={gstState.loading} title="Verify GSTIN & pull company name, address, PAN, state, registration date">
+                  {gstState.loading ? 'Checking…' : '🔍 Verify & Auto-fill'}
+                </button>
+              </div>
+              <div className="faint" style={{ fontSize: 11, marginTop: 4 }}>Enter GSTIN → Verify → company name, address, PAN auto-filled from GST portal (state, trade name, legal name, registration date)</div>
+            </label>
+            <label className="f"><span>PAN (auto from GSTIN)</span><input value={f.pan} onChange={set('pan')} placeholder="ABCDE1234F" style={{ textTransform: 'uppercase' }} /></label>
+          </div>
+
+          {gstState.data && (
+            <div style={{ border: '1px solid var(--gold-line-soft)', borderRadius: 8, padding: 10, marginBottom: 10, background: 'var(--gold-soft)' }}>
+              <div style={{ fontSize: 12.5 }}>
+                <b style={{ color: 'var(--ok)' }}>✓ GSTIN Valid — {gstState.data.state_name} ({gstState.data.state_code}) · PAN {gstState.data.pan} {gstState.data.verified ? '· Verified live from GST portal' : '· Format valid (offline)'}</b>
+                {gstState.data.details && (
+                  <>
+                    <div style={{ marginTop: 6 }}><b>Legal:</b> {gstState.data.details.legal_name || '—'} · <b>Trade:</b> {gstState.data.details.trade_name || '—'}</div>
+                    {gstState.data.details.address && <div className="muted" style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{gstState.data.details.address}</div>}
+                    <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
+                      {gstState.data.details.status && <>Status: {gstState.data.details.status} · </>}
+                      {gstState.data.details.registration_date && <>Reg. Date: {gstState.data.details.registration_date} · </>}
+                      {gstState.data.details.taxpayer_type && <>Type: {gstState.data.details.taxpayer_type}</>}
+                      {gstState.data.details.pincode && <> · Pincode: {gstState.data.details.pincode}</>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                      <button className="btn sm" onClick={() => applyGstDetails(true)}>Use Trade Name + Address</button>
+                      <button className="btn ghost sm" onClick={() => applyGstDetails(false)}>Use Legal Name + Address</button>
+                    </div>
+                  </>
+                )}
+                {!gstState.data.details && gstState.data.message && <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>{gstState.data.message}</div>}
+              </div>
+            </div>
+          )}
+          {gstState.error && <div className="errbox">{gstState.error}</div>}
+
+          <div className="frow">
+            <label className="f"><span>Party address (auto-filled from GSTIN)</span><input value={f.address} onChange={set('address')} placeholder="Auto-pulled from GST portal after Verify" /></label>
             <label className="f"><span>Credit days</span><input value={f.credit_days} onChange={set('credit_days')} placeholder="30" /></label>
             <label className="f"><span>Credit limit</span><input value={f.credit_limit} onChange={set('credit_limit')} /></label>
           </div>

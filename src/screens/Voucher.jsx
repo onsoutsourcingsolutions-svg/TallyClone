@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, useApp } from '../state.jsx';
 import { CompanyBrand } from '../brand.jsx';
 import { CLASSES, dshort, inr, todayISO } from '../fmt.js';
+import { SalesExcelPanel } from './SalesExcel.jsx';
 
 /* ---------- helpers ---------- */
 function rs2p(s) { return Math.round((Number(s) || 0) * 100); }
@@ -467,6 +468,7 @@ export function VoucherScreen({ cls }) {
   const [viewId, setViewId] = useState(null);
   const [editing, setEditing] = useState(null);
   const [useItems, setUseItems] = useState(cls === 'sales' || cls === 'purchase');
+  const [salesMode, setSalesMode] = useState('excel'); // excel | form — user wanted Excel in sales column
   const [since, setSince] = useState(company ? company.books_begin_from : todayISO());
   const load = () => {
     api('/accounts').then((j) => setAccounts(j.rows)).catch((e) => notify(e.message));
@@ -485,15 +487,22 @@ export function VoucherScreen({ cls }) {
   const label = cmeta(cls).label;
   const isInvClass = ['sales', 'purchase', 'credit_note', 'debit_note'].includes(cls);
   const isStockJournal = cls === 'stock_journal';
+  const isSales = cls === 'sales';
   const showItems = useItems && isInvClass;
-  const showInvoice = showItems && items !== null && items.length > 0;
+  const showInvoice = showItems && items !== null && items.length > 0 && !(isSales && salesMode === 'excel');
   const showGeneric = !isInvClass && !isStockJournal;
   return (
     <div>
       <div className="pagetitle">
         <div><div className="crumb">Transactions · {label}</div><h1>{label} {isStockJournal || isInvClass ? '' : 'Voucher'}</h1></div>
         {isInvClass && (
-          <div className="no-print" style={{ display: 'flex', gap: 6 }}>
+          <div className="no-print" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {isSales && (
+              <>
+                <button className={`btn ${salesMode === 'excel' ? '' : 'ghost'}`} onClick={() => setSalesMode('excel')}>📊 Excel View</button>
+                <button className={`btn ${salesMode === 'form' ? '' : 'ghost'}`} onClick={() => setSalesMode('form')}>📝 Form View</button>
+              </>
+            )}
             <button className={`btn ${showItems ? '' : 'ghost'}`} onClick={() => setUseItems(true)}>Stock items</button>
             <button className={`btn ${showItems ? 'ghost' : ''}`} onClick={() => setUseItems(false)}>Simple (ledgers)</button>
           </div>
@@ -502,6 +511,9 @@ export function VoucherScreen({ cls }) {
       {!accounts && <div className="card"><div className="empty">Loading…</div></div>}
       {showItems && items !== null && items.length === 0 && (
         <div className="errbox">No stock items yet — create items under <b>Masters → Stock Items</b>, or switch to “Simple”.</div>
+      )}
+      {accounts && isSales && salesMode === 'excel' && items && (
+        <SalesExcelPanel accounts={accounts} items={items} onSaved={() => load()} />
       )}
       {accounts && showInvoice && (
         <InvoiceEditor key={(editing ? 'edit-' : 'new-') + cls} cls={cls} accounts={accounts} items={items} editing={editing} onSaved={() => load()} />

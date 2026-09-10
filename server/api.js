@@ -15,6 +15,7 @@ import {
 } from './engine.js';
 import { exportKindData, exportKindTemplate, exportKindSample, importKind, parseWorkbook } from './dataio.js';
 import { parseInvoiceWorkbook, importInvoiceExcel } from './invoiceExcel.js';
+import { verifyGSTIN, validateGSTIN, STATE_CODES } from './gst.js';
 // (xlsx is loaded lazily inside dataio.js so a missing package never blocks startup)
 import { GROUPS, groupMeta } from './chart.js';
 import { toPaise, validISO, todayISO, fyEnd, CLASS_META } from './lib.js';
@@ -389,10 +390,18 @@ api.post('/import/invoice_excel', fileUpload.single('file'), async (req, res) =>
     if (!req.file) throw new Error('No file received — choose an .xlsx / .csv file first.');
     const isPreview = String(req.body.preview) === '1';
     if (isPreview) {
-      const parsed = await parseInvoiceWorkbook(req.file.buffer, req.file.originalname);
+      const { parseInvoiceWorkbookBulk } = await import('./invoiceExcel.js');
+      const bulk = await parseInvoiceWorkbookBulk(req.file.buffer, req.file.originalname);
+      if (bulk.length > 1) {
+        return ok(res, { preview: true, bulk, count: bulk.length, filename: req.file.originalname });
+      }
+      const parsed = bulk[0] || await parseInvoiceWorkbook(req.file.buffer, req.file.originalname);
       return ok(res, { preview: true, parsed, filename: req.file.originalname });
     }
     const out = await importInvoiceExcel(c, req.file.buffer, req.file.originalname);
+    if (out.vouchers) {
+      return ok(res, { ok: true, vouchers: out.vouchers, count: out.count, message: `${out.count} sales invoices booked from Excel ✓` });
+    }
     ok(res, { ok: true, voucher: out.voucher, parsed: out.parsed, message: `Sales ${out.voucher.number || '#' + out.voucher.voucher_no} booked ✓` });
   } catch (e) { fail(res, e); }
 });
@@ -459,6 +468,20 @@ api.get('/rates', async (req, res) => {
     const u = await usdRate();
     ok(res, { usd: u ? { rate: u.rate, updatedAt: u.updatedAt, source: u.source } : null });
   } catch (e) { fail(res, e); }
+});
+
+// ---------- GSTIN verification & auto-pull ----------
+api.get('/gst/verify', async (req, res) => {
+  try {
+    const gstin = String(req.query.gstin || '').trim().toUpperCase();
+    if (!gstin) throw new Error('GSTIN is required — e.g. 27ABCDE1234F1Z5');
+    const result = await verifyGSTIN(gstin);
+    ok(res, result);
+  } catch (e) { fail(res, e); }
+});
+
+api.get('/gst/states', (req, res) => {
+  ok(res, { states: STATE_CODES });
 });
 
 // edit log for the company (audit trail screen)
