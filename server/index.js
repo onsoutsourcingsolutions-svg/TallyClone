@@ -22,18 +22,26 @@ app.use('/api', api);
 
 // serve built client (if any) — in development Vite serves the UI instead
 const dist = path.join(ROOT, 'dist');
-if (fs.existsSync(dist)) {
+const distIndex = path.join(dist, 'index.html');
+const hasDist = fs.existsSync(dist) && fs.existsSync(distIndex);
+if (hasDist) {
   app.use(express.static(dist, {
     setHeaders(res, p) { if (p.endsWith('.html')) res.setHeader('Cache-Control', 'no-store'); },
   }));
-  app.get(/^(?!\/api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html')));
+  app.get(/^(?!\/api).*/, (req, res) => res.sendFile(distIndex));
 } else {
+  // dist missing or empty after an update — show helpful page instead of crashing with ENOENT
+  app.use('/dist', (req, res) => res.status(404).send('App files not built yet.'));
   app.get('/', (req, res) => {
     res.send(`<body style="background:#000;color:#d4af37;font-family:sans-serif;padding:40px">
       <h2>O.N.S. OUTSOURCING SOLUTIONS</h2>
-      <p>The web app has not been built yet. Run  <b>npm run build</b>  in this folder,
-      or (easier) start it with  <b>start-windows.bat</b> / <b>start-mac-linux.sh</b>.</p></body>`);
+      <p>The web app has not been built yet. This can happen right after an auto-update if the build step was skipped.</p>
+      <p>Fix: close this window and start again with <b>start-windows.bat</b> (Windows) or <b>start-mac-linux.sh</b> (Mac/Linux) — it will rebuild automatically (needs internet once).</p>
+      <p>If you started via <b>npm start</b>, run <b>npm run build</b> once, then <b>npm start</b> again.</p>
+      <p style="color:#888;font-size:12px">Expected file missing: dist/index.html — folder ${hasDist ? 'has index' : 'missing'}</p></body>`);
   });
+  // also catch all non-api routes to show same message
+  app.get(/^(?!\/api).*/, (req, res) => res.redirect('/'));
 }
 
 function lanAddresses() {

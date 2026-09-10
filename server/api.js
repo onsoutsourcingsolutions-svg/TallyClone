@@ -535,8 +535,8 @@ const TAG_URL = process.env.ONS_UPDATE_VERSION_URL || 'https://raw.githubusercon
 
 // paths that are never replaced by an update
 const UPDATE_SKIP = ['data', 'node_modules', '.git', '_update_stage', 'ONS-Books-PC-Package.zip', 'install-log.txt', 'diag.txt'];
-// roots that may be pruned of files a newer package no longer has
-const CODE_ROOTS = ['server', 'dist', 'src', 'public', 'scripts', 'templates'];
+// roots that may be pruned of files a newer package no longer has — NOTE: dist is NOT pruned because package may exclude it and we rebuild it
+const CODE_ROOTS = ['server', 'src', 'public', 'scripts', 'templates'];
 const ROOT_FILES = ['index.html', 'package.json', 'package-lock.json', 'vite.config.js', 'version.js', 'README.md',
   'start-windows.bat', 'START_ME.bat', 'start-mac-linux.sh', 'TEST.bat', 'diagnose.bat'];
 
