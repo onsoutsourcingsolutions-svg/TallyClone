@@ -1,0 +1,1677 @@
+{
+ "page": {
+  "w": 595.3,
+  "h": 841.9
+ },
+ "lines": [
+  {
+   "y": 21.34,
+   "size": 12,
+   "inkTop": 25.5,
+   "inkBot": 33,
+   "x0": 206.8,
+   "x1": 332.7,
+   "parts": [
+    {
+     "x0": 206.8,
+     "x1": 332.7,
+     "size": 12,
+     "str": "PROFORMA INVOICE",
+     "inkTop": 25.5,
+     "inkBot": 33,
+     "ix0": 207.5,
+     "ix1": 331.5
+    }
+   ]
+  },
+  {
+   "y": 40.78,
+   "size": 10.8,
+   "inkTop": 40,
+   "inkBot": 57,
+   "x0": 14.6,
+   "x1": 329.9,
+   "parts": [
+    {
+     "x0": 218.6,
+     "x1": 270.9,
+     "size": 10.8,
+     "str": "Invoice No.",
+     "inkTop": 40,
+     "inkBot": 51,
+     "ix0": 218.5,
+     "ix1": 271
+    },
+    {
+     "x0": 302.3,
+     "x1": 329.9,
+     "size": 10.8,
+     "str": "Dated",
+     "inkTop": 40,
+     "inkBot": 51,
+     "ix0": 302,
+     "ix1": 330
+    },
+    {
+     "x0": 14.6,
+     "x1": 195.2,
+     "size": 10.8,
+     "str": "O.N.S. OUTSOURCING SOLUTIONS",
+     "inkTop": 40,
+     "inkBot": 57,
+     "ix0": 14.5,
+     "ix1": 195.5
+    }
+   ]
+  },
+  {
+   "y": 53.98,
+   "size": 10.8,
+   "inkTop": 50.5,
+   "inkBot": 67.5,
+   "x0": 14.6,
+   "x1": 352.7,
+   "parts": [
+    {
+     "x0": 218.6,
+     "x1": 274.4,
+     "size": 10.8,
+     "str": "ONS/PI-200",
+     "inkTop": 50.5,
+     "inkBot": 67.5,
+     "ix0": 218.5,
+     "ix1": 274.5
+    },
+    {
+     "x0": 302.3,
+     "x1": 352.7,
+     "size": 10.8,
+     "str": "09-09-2026",
+     "inkTop": 50.5,
+     "inkBot": 67.5,
+     "ix0": 302,
+     "ix1": 353
+    },
+    {
+     "x0": 14.6,
+     "x1": 179.1,
+     "size": 10.8,
+     "str": "T7 Summit, 20th Floor Apt. No. 2001",
+     "inkTop": 50.5,
+     "inkBot": 66.5,
+     "ix0": 15,
+     "ix1": 179.5
+    }
+   ]
+  },
+  {
+   "y": 67.54,
+   "size": 10.8,
+   "inkTop": 64.5,
+   "inkBot": 84,
+   "x0": 14.6,
+   "x1": 387.3,
+   "parts": [
+    {
+     "x0": 218.6,
+     "x1": 282,
+     "size": 10.8,
+     "str": "Delivery Note",
+     "inkTop": 64.5,
+     "inkBot": 80,
+     "ix0": 218.5,
+     "ix1": 282
+    },
+    {
+     "x0": 302.2,
+     "x1": 387.3,
+     "size": 10.8,
+     "str": "Terms of Payment",
+     "inkTop": 64.5,
+     "inkBot": 80,
+     "ix0": 302,
+     "ix1": 387.5
+    },
+    {
+     "x0": 14.6,
+     "x1": 181.6,
+     "size": 10.8,
+     "str": "Joyville Virar, Stephen Menezes Marg",
+     "inkTop": 64.5,
+     "inkBot": 84,
+     "ix0": 15,
+     "ix1": 180.5
+    }
+   ]
+  },
+  {
+   "y": 80.74,
+   "size": 10.8,
+   "inkTop": 77.5,
+   "inkBot": 94,
+   "x0": 14.6,
+   "x1": 356.3,
+   "parts": [
+    {
+     "x0": 302.3,
+     "x1": 356.3,
+     "size": 10.8,
+     "str": "ADVANCE",
+     "inkTop": 77.5,
+     "inkBot": 94,
+     "ix0": 302,
+     "ix1": 356.5
+    },
+    {
+     "x0": 14.6,
+     "x1": 169.2,
+     "size": 10.8,
+     "str": "Bolinj Virar West, Palghar- 401303",
+     "inkTop": 77.5,
+     "inkBot": 93,
+     "ix0": 15,
+     "ix1": 169.5
+    }
+   ]
+  },
+  {
+   "y": 94.3,
+   "size": 10.8,
+   "inkTop": 91,
+   "inkBot": 107,
+   "x0": 14.6,
+   "x1": 329.9,
+   "parts": [
+    {
+     "x0": 218.6,
+     "x1": 280.2,
+     "size": 10.8,
+     "str": "Reference By",
+     "inkTop": 93.5,
+     "inkBot": 107,
+     "ix0": 218.5,
+     "ix1": 280.5
+    },
+    {
+     "x0": 302.3,
+     "x1": 329.9,
+     "size": 10.8,
+     "str": "Dated",
+     "inkTop": 91,
+     "inkBot": 104.5,
+     "ix0": 302,
+     "ix1": 330
+    },
+    {
+     "x0": 14.6,
+     "x1": 150.6,
+     "size": 10.8,
+     "str": "State:- Maharashtra, Code :- 27",
+     "inkTop": 91,
+     "inkBot": 106,
+     "ix0": 15.5,
+     "ix1": 151
+    }
+   ]
+  },
+  {
+   "y": 107.5,
+   "size": 10.8,
+   "inkTop": 104,
+   "inkBot": 121,
+   "x0": 14.6,
+   "x1": 277.2,
+   "parts": [
+    {
+     "x0": 218.6,
+     "x1": 277.2,
+     "size": 10.8,
+     "str": "Virag Vohra",
+     "inkTop": 104,
+     "inkBot": 121,
+     "ix0": 218.5,
+     "ix1": 277.5
+    },
+    {
+     "x0": 14.6,
+     "x1": 137.2,
+     "size": 10.8,
+     "str": "GST- 27GOCPM8040A1Z6",
+     "inkTop": 104,
+     "inkBot": 121,
+     "ix0": 14.5,
+     "ix1": 137.5
+    }
+   ]
+  },
+  {
+   "y": 121.06,
+   "size": 10.8,
+   "inkTop": 118,
+   "inkBot": 137.5,
+   "x0": 14.6,
+   "x1": 390,
+   "parts": [
+    {
+     "x0": 218.6,
+     "x1": 390,
+     "size": 10.8,
+     "str": "Dispatch Doc.No. Delivery Note Date",
+     "inkTop": 118,
+     "inkBot": 137.5,
+     "ix0": 218.5,
+     "ix1": 390.5
+    },
+    {
+     "x0": 14.6,
+     "x1": 100.6,
+     "size": 10.8,
+     "str": "Buyer Bill (Bill To)",
+     "inkTop": 120.5,
+     "inkBot": 133.5,
+     "ix0": 14.5,
+     "ix1": 101
+    }
+   ]
+  },
+  {
+   "y": 134.26,
+   "size": 10.8,
+   "inkTop": 131,
+   "inkBot": 144.5,
+   "x0": 14.6,
+   "x1": 105.6,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 105.6,
+     "size": 10.8,
+     "str": "REFTECH IMPEX",
+     "inkTop": 131,
+     "inkBot": 144.5,
+     "ix0": 15.5,
+     "ix1": 104.5
+    }
+   ]
+  },
+  {
+   "y": 147.82,
+   "size": 10.8,
+   "inkTop": 144.5,
+   "inkBot": 164,
+   "x0": 14.6,
+   "x1": 355.1,
+   "parts": [
+    {
+     "x0": 218.6,
+     "x1": 286.7,
+     "size": 10.8,
+     "str": "Dispatched via",
+     "inkTop": 147,
+     "inkBot": 160.5,
+     "ix0": 218.5,
+     "ix1": 287
+    },
+    {
+     "x0": 302.3,
+     "x1": 355.1,
+     "size": 10.8,
+     "str": "Destination",
+     "inkTop": 147,
+     "inkBot": 158,
+     "ix0": 302,
+     "ix1": 355.5
+    },
+    {
+     "x0": 14.6,
+     "x1": 213.4,
+     "size": 10.8,
+     "str": "F/620, Sundaram II SV Road Ram Baug Lane",
+     "inkTop": 144.5,
+     "inkBot": 164,
+     "ix0": 15.5,
+     "ix1": 212.5
+    }
+   ]
+  },
+  {
+   "y": 160.78,
+   "size": 10.8,
+   "inkTop": 157.5,
+   "inkBot": 173.5,
+   "x0": 14.6,
+   "x1": 168.4,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 168.4,
+     "size": 10.8,
+     "str": "Behind Vijay Sales Sai Baba Nagar",
+     "inkTop": 157.5,
+     "inkBot": 173.5,
+     "ix0": 15.5,
+     "ix1": 168.5
+    }
+   ]
+  },
+  {
+   "y": 174.34,
+   "size": 10.8,
+   "inkTop": 171,
+   "inkBot": 187,
+   "x0": 14.6,
+   "x1": 302,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 152.8,
+     "size": 10.8,
+     "str": "Borivali West Mumbai- 400092",
+     "inkTop": 171,
+     "inkBot": 184.5,
+     "ix0": 15,
+     "ix1": 153
+    },
+    {
+     "x0": 218.6,
+     "x1": 302,
+     "size": 10.8,
+     "str": "Terms of Delivery",
+     "inkTop": 171,
+     "inkBot": 187,
+     "ix0": 218.5,
+     "ix1": 302.5
+    }
+   ]
+  },
+  {
+   "y": 187.54,
+   "size": 10.8,
+   "inkTop": 184.5,
+   "inkBot": 201.5,
+   "x0": 14.6,
+   "x1": 137.2,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 137.2,
+     "size": 10.8,
+     "str": "GST- 27AKOPD7221N1ZT",
+     "inkTop": 184.5,
+     "inkBot": 201.5,
+     "ix0": 14.5,
+     "ix1": 137.5
+    }
+   ]
+  },
+  {
+   "y": 201.1,
+   "size": 10.8,
+   "inkTop": 198,
+   "inkBot": 213.5,
+   "x0": 14.6,
+   "x1": 330,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 104.6,
+     "size": 10.8,
+     "str": "Consignee (Ship To)",
+     "inkTop": 198,
+     "inkBot": 213.5,
+     "ix0": 14.5,
+     "ix1": 105
+    },
+    {
+     "x0": 218.6,
+     "x1": 330,
+     "size": 10.8,
+     "str": "ADVANCE PAYMENT",
+     "inkTop": 205,
+     "inkBot": 212,
+     "ix0": 219,
+     "ix1": 329
+    }
+   ]
+  },
+  {
+   "y": 214.54,
+   "size": 10.8,
+   "inkTop": 211.5,
+   "inkBot": 231,
+   "x0": 14.6,
+   "x1": 361.9,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 105.6,
+     "size": 10.8,
+     "str": "REFTECH IMPEX",
+     "inkTop": 211.5,
+     "inkBot": 231,
+     "ix0": 15.5,
+     "ix1": 105
+    },
+    {
+     "x0": 218.7,
+     "x1": 361.9,
+     "size": 10.8,
+     "str": "NO RETURNS OR REFUNDS",
+     "inkTop": 211.5,
+     "inkBot": 225,
+     "ix0": 219,
+     "ix1": 361
+    }
+   ]
+  },
+  {
+   "y": 227.5,
+   "size": 10.8,
+   "inkTop": 224,
+   "inkBot": 240,
+   "x0": 14.6,
+   "x1": 508.3,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 177.6,
+     "size": 10.8,
+     "str": "Ground Floor, Grampanchayat House",
+     "inkTop": 224,
+     "inkBot": 240,
+     "ix0": 15,
+     "ix1": 176.5
+    },
+    {
+     "x0": 218.6,
+     "x1": 508.3,
+     "size": 10.8,
+     "str": "FOR FURTHER ENQUIRIES CONTACT US AT 8692881045",
+     "inkTop": 224,
+     "inkBot": 240,
+     "ix0": 219,
+     "ix1": 507.5
+    }
+   ]
+  },
+  {
+   "y": 240.7,
+   "size": 10.8,
+   "inkTop": 237.5,
+   "inkBot": 253.5,
+   "x0": 14.6,
+   "x1": 173.4,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 173.4,
+     "size": 10.8,
+     "str": "Harihar Complex, Dapode,Bhiwandi",
+     "inkTop": 237.5,
+     "inkBot": 253.5,
+     "ix0": 15.5,
+     "ix1": 172
+    }
+   ]
+  },
+  {
+   "y": 253.9,
+   "size": 10.8,
+   "inkTop": 250.5,
+   "inkBot": 265.5,
+   "x0": 14.6,
+   "x1": 137.1,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 137.1,
+     "size": 10.8,
+     "str": "Thane,Maharashtra- 421302",
+     "inkTop": 250.5,
+     "inkBot": 265.5,
+     "ix0": 15,
+     "ix1": 137
+    }
+   ]
+  },
+  {
+   "y": 267.1,
+   "size": 10.8,
+   "inkTop": 264,
+   "inkBot": 283.5,
+   "x0": 14.6,
+   "x1": 137.2,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 137.2,
+     "size": 10.8,
+     "str": "GST- 27AKOPD7221N1ZT",
+     "inkTop": 264,
+     "inkBot": 283.5,
+     "ix0": 14.5,
+     "ix1": 137.5
+    }
+   ]
+  },
+  {
+   "y": 280.66,
+   "size": 10.8,
+   "inkTop": 277.5,
+   "inkBot": 294.5,
+   "x0": 15.2,
+   "x1": 553.7,
+   "parts": [
+    {
+     "x0": 15.2,
+     "x1": 31.1,
+     "size": 10.8,
+     "str": "No.",
+     "inkTop": 277.5,
+     "inkBot": 294.5,
+     "ix0": 15,
+     "ix1": 31.5
+    },
+    {
+     "x0": 78.8,
+     "x1": 171.8,
+     "size": 10.8,
+     "str": "Description of Goods",
+     "inkTop": 277.5,
+     "inkBot": 294.5,
+     "ix0": 78.5,
+     "ix1": 172
+    },
+    {
+     "x0": 236.2,
+     "x1": 281.8,
+     "size": 10.8,
+     "str": "HSN/SAC",
+     "inkTop": 280.5,
+     "inkBot": 294.5,
+     "ix0": 236,
+     "ix1": 282
+    },
+    {
+     "x0": 328.5,
+     "x1": 366.3,
+     "size": 10.8,
+     "str": "Quantity",
+     "inkTop": 280.5,
+     "inkBot": 294.5,
+     "ix0": 328,
+     "ix1": 366.5
+    },
+    {
+     "x0": 410.5,
+     "x1": 430.3,
+     "size": 10.8,
+     "str": "Rate",
+     "inkTop": 280.5,
+     "inkBot": 294.5,
+     "ix0": 410.5,
+     "ix1": 430.5
+    },
+    {
+     "x0": 467.3,
+     "x1": 481.1,
+     "size": 10.8,
+     "str": "per",
+     "inkTop": 280.5,
+     "inkBot": 294.5,
+     "ix0": 467,
+     "ix1": 481.5
+    },
+    {
+     "x0": 518.5,
+     "x1": 553.7,
+     "size": 10.8,
+     "str": "Amount",
+     "inkTop": 280.5,
+     "inkBot": 294.5,
+     "ix0": 518,
+     "ix1": 554
+    }
+   ]
+  },
+  {
+   "y": 307.42,
+   "size": 10.8,
+   "inkTop": 311,
+   "inkBot": 323.5,
+   "x0": 20.5,
+   "x1": 566,
+   "parts": [
+    {
+     "x0": 20.5,
+     "x1": 25.9,
+     "size": 10.8,
+     "str": "1",
+     "inkTop": 311,
+     "inkBot": 317.5,
+     "ix0": 22,
+     "ix1": 23.5
+    },
+    {
+     "x0": 44.9,
+     "x1": 205.6,
+     "size": 10.8,
+     "str": "CHEMIEBOR - 36 (GRANULAR)",
+     "inkTop": 311,
+     "inkBot": 323.5,
+     "ix0": 45.5,
+     "ix1": 204.5
+    },
+    {
+     "x0": 237.4,
+     "x1": 280.6,
+     "size": 10.8,
+     "str": "28401900",
+     "inkTop": 311,
+     "inkBot": 318,
+     "ix0": 238,
+     "ix1": 279.5
+    },
+    {
+     "x0": 335,
+     "x1": 359.4,
+     "size": 10.8,
+     "str": "2,000",
+     "inkTop": 311,
+     "inkBot": 323.5,
+     "ix0": 335.5,
+     "ix1": 358.5
+    },
+    {
+     "x0": 417.8,
+     "x1": 442.2,
+     "size": 10.8,
+     "str": "80.50",
+     "inkTop": 311,
+     "inkBot": 318,
+     "ix0": 418.5,
+     "ix1": 441.5
+    },
+    {
+     "x0": 398.6,
+     "x1": 404,
+     "size": 10.8,
+     "str": "₹",
+     "inkTop": 311,
+     "inkBot": 317.5,
+     "ix0": 399.5,
+     "ix1": 403
+    },
+    {
+     "x0": 463.4,
+     "x1": 485,
+     "size": 10.8,
+     "str": "KGS",
+     "inkTop": 311,
+     "inkBot": 318,
+     "ix0": 464.5,
+     "ix1": 484
+    },
+    {
+     "x0": 514.4,
+     "x1": 566,
+     "size": 10.8,
+     "str": "1,61,000.00",
+     "inkTop": 311,
+     "inkBot": 319.5,
+     "ix0": 515.5,
+     "ix1": 565
+    },
+    {
+     "x0": 506.3,
+     "x1": 511.7,
+     "size": 10.8,
+     "str": "₹",
+     "inkTop": 311.5,
+     "inkBot": 318,
+     "ix0": 506.5,
+     "ix1": 511
+    }
+   ]
+  },
+  {
+   "y": 320.5,
+   "size": 9.6,
+   "inkTop": 317,
+   "inkBot": 331.5,
+   "x0": 44,
+   "x1": 379,
+   "parts": [
+    {
+     "x0": 44,
+     "x1": 204.8,
+     "size": 9.6,
+     "str": "(TECHNICAL BORAX DECAHYDRATE)",
+     "inkTop": 317,
+     "inkBot": 331,
+     "ix0": 44.5,
+     "ix1": 204.5
+    },
+    {
+     "x0": 313.5,
+     "x1": 379,
+     "size": 9.6,
+     "str": "(25kg x 80 Bags)",
+     "inkTop": 317,
+     "inkBot": 331.5,
+     "ix0": 314,
+     "ix1": 378
+    }
+   ]
+  },
+  {
+   "y": 360.46,
+   "size": 10.8,
+   "inkTop": 364,
+   "inkBot": 372,
+   "x0": 148,
+   "x1": 566,
+   "parts": [
+    {
+     "x0": 148,
+     "x1": 214.7,
+     "size": 10.8,
+     "str": "Taxable Value",
+     "inkTop": 364,
+     "inkBot": 371,
+     "ix0": 148.5,
+     "ix1": 214
+    },
+    {
+     "x0": 514.4,
+     "x1": 566,
+     "size": 10.8,
+     "str": "1,61,000.00",
+     "inkTop": 364,
+     "inkBot": 372,
+     "ix0": 516.5,
+     "ix1": 565
+    },
+    {
+     "x0": 506.3,
+     "x1": 511.7,
+     "size": 10.8,
+     "str": "₹",
+     "inkTop": 364,
+     "inkBot": 370.5,
+     "ix0": 507,
+     "ix1": 510.5
+    }
+   ]
+  },
+  {
+   "y": 413.26,
+   "size": 10.8,
+   "inkTop": 416.5,
+   "inkBot": 426,
+   "x0": 150.8,
+   "x1": 565.9,
+   "parts": [
+    {
+     "x0": 150.8,
+     "x1": 214.8,
+     "size": 10.8,
+     "str": "Output SGST",
+     "inkTop": 417,
+     "inkBot": 426,
+     "ix0": 151.5,
+     "ix1": 214
+    },
+    {
+     "x0": 413.3,
+     "x1": 427.7,
+     "size": 10.8,
+     "str": "9%",
+     "inkTop": 416.5,
+     "inkBot": 423.5,
+     "ix0": 413.5,
+     "ix1": 427
+    },
+    {
+     "x0": 522.6,
+     "x1": 565.9,
+     "size": 10.8,
+     "str": "14,490.00",
+     "inkTop": 416.5,
+     "inkBot": 424,
+     "ix0": 524,
+     "ix1": 565
+    },
+    {
+     "x0": 506.2,
+     "x1": 511.6,
+     "size": 10.8,
+     "str": "₹",
+     "inkTop": 417,
+     "inkBot": 423.5,
+     "ix0": 507,
+     "ix1": 510
+    }
+   ]
+  },
+  {
+   "y": 426.46,
+   "size": 10.8,
+   "inkTop": 423,
+   "inkBot": 439,
+   "x0": 149,
+   "x1": 565.9,
+   "parts": [
+    {
+     "x0": 149,
+     "x1": 214.8,
+     "size": 10.8,
+     "str": "Output CGST",
+     "inkTop": 423,
+     "inkBot": 439,
+     "ix0": 149.5,
+     "ix1": 214
+    },
+    {
+     "x0": 413.3,
+     "x1": 427.7,
+     "size": 10.8,
+     "str": "9%",
+     "inkTop": 423,
+     "inkBot": 437,
+     "ix0": 413.5,
+     "ix1": 427
+    },
+    {
+     "x0": 522.6,
+     "x1": 565.9,
+     "size": 10.8,
+     "str": "14,490.00",
+     "inkTop": 423,
+     "inkBot": 438,
+     "ix0": 524,
+     "ix1": 565
+    },
+    {
+     "x0": 506.2,
+     "x1": 511.6,
+     "size": 10.8,
+     "str": "₹",
+     "inkTop": 423,
+     "inkBot": 436.5,
+     "ix0": 507,
+     "ix1": 510.5
+    }
+   ]
+  },
+  {
+   "y": 439.66,
+   "size": 10.8,
+   "inkTop": 436.5,
+   "inkBot": 450,
+   "x0": 165.2,
+   "x1": 555.2,
+   "parts": [
+    {
+     "x0": 165.2,
+     "x1": 214.8,
+     "size": 10.8,
+     "str": "Round Off",
+     "inkTop": 436.5,
+     "inkBot": 450,
+     "ix0": 165,
+     "ix1": 215
+    },
+    {
+     "x0": 551.6,
+     "x1": 555.2,
+     "size": 10.8,
+     "str": "-",
+     "inkTop": 436.5,
+     "inkBot": 447.5,
+     "ix0": 552,
+     "ix1": 554.5
+    },
+    {
+     "x0": 506.9,
+     "x1": 512.3,
+     "size": 10.8,
+     "str": "₹",
+     "inkTop": 436.5,
+     "inkBot": 449.5,
+     "ix0": 507.5,
+     "ix1": 511
+    }
+   ]
+  },
+  {
+   "y": 492.82,
+   "size": 10.8,
+   "inkTop": 492,
+   "inkBot": 506.5,
+   "x0": 190.2,
+   "x1": 565.9,
+   "parts": [
+    {
+     "x0": 190.2,
+     "x1": 214.8,
+     "size": 10.8,
+     "str": "Total",
+     "inkTop": 492,
+     "inkBot": 506.5,
+     "ix0": 190,
+     "ix1": 215
+    },
+    {
+     "x0": 335,
+     "x1": 359.4,
+     "size": 10.8,
+     "str": "2,000",
+     "inkTop": 492,
+     "inkBot": 506.5,
+     "ix0": 335,
+     "ix1": 359.5
+    },
+    {
+     "x0": 514.4,
+     "x1": 565.9,
+     "size": 10.8,
+     "str": "1,89,980.00",
+     "inkTop": 492,
+     "inkBot": 506.5,
+     "ix0": 514,
+     "ix1": 566
+    },
+    {
+     "x0": 506.3,
+     "x1": 511.7,
+     "size": 10.8,
+     "str": "₹",
+     "inkTop": 492,
+     "inkBot": 506.5,
+     "ix0": 506,
+     "ix1": 512
+    }
+   ]
+  },
+  {
+   "y": 506.14,
+   "size": 10.8,
+   "inkTop": 503,
+   "inkBot": 516.5,
+   "x0": 14.6,
+   "x1": 566.7,
+   "parts": [
+    {
+     "x0": 540.2,
+     "x1": 566.7,
+     "size": 10.8,
+     "str": "E.O.E",
+     "inkTop": 503,
+     "inkBot": 516.5,
+     "ix0": 540,
+     "ix1": 567
+    },
+    {
+     "x0": 14.6,
+     "x1": 144.2,
+     "size": 10.8,
+     "str": "Amount To Be Paid in Words",
+     "inkTop": 503,
+     "inkBot": 516.5,
+     "ix0": 14.5,
+     "ix1": 144.5
+    }
+   ]
+  },
+  {
+   "y": 519.58,
+   "size": 10.8,
+   "inkTop": 516.5,
+   "inkBot": 536,
+   "x0": 14.6,
+   "x1": 345.2,
+   "parts": [
+    {
+     "x0": 14.6,
+     "x1": 345.2,
+     "size": 10.8,
+     "str": "Rupees One Lac Eighty Nine Thousand Nine Hundred and Eighty Only",
+     "inkTop": 516.5,
+     "inkBot": 536,
+     "ix0": 14.5,
+     "ix1": 345.5
+    }
+   ]
+  },
+  {
+   "y": 532.9,
+   "size": 10.8,
+   "inkTop": 529.5,
+   "inkBot": 549,
+   "x0": 14.6,
+   "x1": 556,
+   "parts": [
+    {
+     "x0": 314.2,
+     "x1": 377.3,
+     "size": 10.8,
+     "str": "Taxable Value",
+     "inkTop": 529.5,
+     "inkBot": 546.5,
+     "ix0": 314,
+     "ix1": 377.5
+    },
+    {
+     "x0": 407.3,
+     "x1": 433.7,
+     "size": 10.8,
+     "str": "SGST",
+     "inkTop": 532.5,
+     "inkBot": 546.5,
+     "ix0": 407,
+     "ix1": 434
+    },
+    {
+     "x0": 460.4,
+     "x1": 488,
+     "size": 10.8,
+     "str": "CGST",
+     "inkTop": 532.5,
+     "inkBot": 546.5,
+     "ix0": 460,
+     "ix1": 488
+    },
+    {
+     "x0": 513.6,
+     "x1": 556,
+     "size": 10.8,
+     "str": "Total Tax",
+     "inkTop": 532.5,
+     "inkBot": 546.5,
+     "ix0": 513.5,
+     "ix1": 556.5
+    },
+    {
+     "x0": 14.6,
+     "x1": 68.7,
+     "size": 10.8,
+     "str": "Declaration",
+     "inkTop": 529.5,
+     "inkBot": 549,
+     "ix0": 14.5,
+     "ix1": 69
+    }
+   ]
+  },
+  {
+   "y": 546.34,
+   "size": 9.6,
+   "inkTop": 543,
+   "inkBot": 562.5,
+   "x0": 14.2,
+   "x1": 566.5,
+   "parts": [
+    {
+     "x0": 343.4,
+     "x1": 389,
+     "size": 9.6,
+     "str": "1,61,000.00",
+     "inkTop": 543,
+     "inkBot": 562.5,
+     "ix0": 343,
+     "ix1": 389.5
+    },
+    {
+     "x0": 305.2,
+     "x1": 310,
+     "size": 9.6,
+     "str": "₹",
+     "inkTop": 546,
+     "inkBot": 562.5,
+     "ix0": 305,
+     "ix1": 310
+    },
+    {
+     "x0": 404.4,
+     "x1": 442.8,
+     "size": 9.6,
+     "str": "14,490.00",
+     "inkTop": 543,
+     "inkBot": 559,
+     "ix0": 404,
+     "ix1": 443
+    },
+    {
+     "x0": 397.7,
+     "x1": 402.5,
+     "size": 9.6,
+     "str": "₹",
+     "inkTop": 546,
+     "inkBot": 559,
+     "ix0": 397.5,
+     "ix1": 402.5
+    },
+    {
+     "x0": 458.2,
+     "x1": 496.6,
+     "size": 9.6,
+     "str": "14,490.00",
+     "inkTop": 543,
+     "inkBot": 559,
+     "ix0": 458,
+     "ix1": 497
+    },
+    {
+     "x0": 451.4,
+     "x1": 456.2,
+     "size": 9.6,
+     "str": "₹",
+     "inkTop": 546,
+     "inkBot": 559,
+     "ix0": 451,
+     "ix1": 456.5
+    },
+    {
+     "x0": 528.1,
+     "x1": 566.5,
+     "size": 9.6,
+     "str": "28,980.00",
+     "inkTop": 543,
+     "inkBot": 559,
+     "ix0": 528,
+     "ix1": 567
+    },
+    {
+     "x0": 506,
+     "x1": 510.8,
+     "size": 9.6,
+     "str": "₹",
+     "inkTop": 546,
+     "inkBot": 559,
+     "ix0": 506,
+     "ix1": 511
+    },
+    {
+     "x0": 14.2,
+     "x1": 287.4,
+     "size": 7.2,
+     "str": "\"I/We hereby certify that my/our registration under the relevant laws and bylaws of the Central",
+     "inkTop": 543,
+     "inkBot": 562.5,
+     "ix0": 14,
+     "ix1": 287.5
+    }
+   ]
+  },
+  {
+   "y": 555.82,
+   "size": 7.2,
+   "inkTop": 552.5,
+   "inkBot": 571.5,
+   "x0": 14.2,
+   "x1": 381.4,
+   "parts": [
+    {
+     "x0": 14.2,
+     "x1": 293.4,
+     "size": 7.2,
+     "str": "Goods and Service Tax Act, 2017 is in force on the date on which the sale of the goods specified",
+     "inkTop": 552.5,
+     "inkBot": 571.5,
+     "ix0": 14.5,
+     "ix1": 292.5
+    },
+    {
+     "x0": 302,
+     "x1": 381.4,
+     "size": 9.6,
+     "str": "Our Banking Details",
+     "inkTop": 552.5,
+     "inkBot": 570,
+     "ix0": 302,
+     "ix1": 381.5
+    }
+   ]
+  },
+  {
+   "y": 564.94,
+   "size": 7.2,
+   "inkTop": 561.5,
+   "inkBot": 581,
+   "x0": 14.2,
+   "x1": 292.3,
+   "parts": [
+    {
+     "x0": 14.2,
+     "x1": 292.3,
+     "size": 7.2,
+     "str": "in this TAX INVOICE is made by me/us and that the relevant transaction of sale covered by this",
+     "inkTop": 561.5,
+     "inkBot": 581,
+     "ix0": 14.5,
+     "ix1": 292.5
+    }
+   ]
+  },
+  {
+   "y": 574.06,
+   "size": 7.2,
+   "inkTop": 571,
+   "inkBot": 590.5,
+   "x0": 14.2,
+   "x1": 543.8,
+   "parts": [
+    {
+     "x0": 14.2,
+     "x1": 291.3,
+     "size": 7.2,
+     "str": "TAX INVOICE has been effected by me/us and it shall be accounted for in the turnover of sales",
+     "inkTop": 571,
+     "inkBot": 590.5,
+     "ix0": 14.5,
+     "ix1": 291.5
+    },
+    {
+     "x0": 302,
+     "x1": 383.9,
+     "size": 9.6,
+     "str": "Name of A/c Holder-",
+     "inkTop": 574.5,
+     "inkBot": 590.5,
+     "ix0": 302.5,
+     "ix1": 384
+    },
+    {
+     "x0": 386.2,
+     "x1": 543.8,
+     "size": 9.6,
+     "str": "O N S OUTSOURICNG SOLUTIONS",
+     "inkTop": 574.5,
+     "inkBot": 590.5,
+     "ix0": 386,
+     "ix1": 543
+    }
+   ]
+  },
+  {
+   "y": 583.18,
+   "size": 7.2,
+   "inkTop": 580,
+   "inkBot": 599.5,
+   "x0": 14.2,
+   "x1": 455.2,
+   "parts": [
+    {
+     "x0": 14.2,
+     "x1": 293.2,
+     "size": 7.2,
+     "str": "while filling of return and the due tax, if any, payable on the sale has been paid or shall be paid.\"",
+     "inkTop": 580,
+     "inkBot": 599.5,
+     "ix0": 14.5,
+     "ix1": 292.5
+    },
+    {
+     "x0": 302,
+     "x1": 375.2,
+     "size": 9.6,
+     "str": "Name of the Bank-",
+     "inkTop": 580,
+     "inkBot": 599.5,
+     "ix0": 302.5,
+     "ix1": 375.5
+    },
+    {
+     "x0": 377.5,
+     "x1": 455.2,
+     "size": 9.6,
+     "str": "INDUSIND BANK",
+     "inkTop": 580,
+     "inkBot": 599.5,
+     "ix0": 377.5,
+     "ix1": 455.5
+    }
+   ]
+  },
+  {
+   "y": 592.3,
+   "size": 7.2,
+   "inkTop": 589,
+   "inkBot": 608.5,
+   "x0": 14.2,
+   "x1": 427.3,
+   "parts": [
+    {
+     "x0": 14.2,
+     "x1": 293.3,
+     "size": 7.2,
+     "str": "Please ensure payments are completed on time. Interest on late payments will be charged at 21%",
+     "inkTop": 589,
+     "inkBot": 608.5,
+     "ix0": 14.5,
+     "ix1": 292.5
+    },
+    {
+     "x0": 302,
+     "x1": 367.4,
+     "size": 9.6,
+     "str": "Current A/c No.-",
+     "inkTop": 589,
+     "inkBot": 604.5,
+     "ix0": 302.5,
+     "ix1": 366.5
+    },
+    {
+     "x0": 369.7,
+     "x1": 427.3,
+     "size": 9.6,
+     "str": "258369270124",
+     "inkTop": 589,
+     "inkBot": 604.5,
+     "ix0": 369.5,
+     "ix1": 426.5
+    }
+   ]
+  },
+  {
+   "y": 601.42,
+   "size": 7.2,
+   "inkTop": 598,
+   "inkBot": 617.5,
+   "x0": 14.2,
+   "x1": 269.8,
+   "parts": [
+    {
+     "x0": 14.2,
+     "x1": 269.8,
+     "size": 7.2,
+     "str": "p.a. Please ensure that all goods have been checked at the time of delivery. Requests for",
+     "inkTop": 598,
+     "inkBot": 617.5,
+     "ix0": 14.5,
+     "ix1": 270
+    }
+   ]
+  },
+  {
+   "y": 607.66,
+   "size": 9.6,
+   "inkTop": 604.5,
+   "inkBot": 621.5,
+   "x0": 14.2,
+   "x1": 540.5,
+   "parts": [
+    {
+     "x0": 302,
+     "x1": 387.9,
+     "size": 9.6,
+     "str": "Branch & IFSC Code-",
+     "inkTop": 604.5,
+     "inkBot": 621.5,
+     "ix0": 302,
+     "ix1": 388
+    },
+    {
+     "x0": 390.2,
+     "x1": 540.5,
+     "size": 9.6,
+     "str": "Mahim Mumbai-16 & INDB0001825",
+     "inkTop": 604.5,
+     "inkBot": 621.5,
+     "ix0": 390,
+     "ix1": 540.5
+    },
+    {
+     "x0": 14.2,
+     "x1": 281.1,
+     "size": 7.2,
+     "str": "damaged/ missing goods will be entertained only if reported 24hrs within receiving delivery.",
+     "inkTop": 604.5,
+     "inkBot": 621.5,
+     "ix0": 14,
+     "ix1": 281.5
+    }
+   ]
+  },
+  {
+   "y": 619.66,
+   "size": 7.2,
+   "inkTop": 616.5,
+   "inkBot": 632.5,
+   "x0": 14.2,
+   "x1": 220.2,
+   "parts": [
+    {
+     "x0": 14.2,
+     "x1": 181,
+     "size": 7.2,
+     "str": "E.O.E. Thank you for your business. Om Namah Shivaay.",
+     "inkTop": 616.5,
+     "inkBot": 630.5,
+     "ix0": 14,
+     "ix1": 181
+    },
+    {
+     "x0": 93.8,
+     "x1": 220.2,
+     "size": 9.6,
+     "str": "Customer's Seal and Signature",
+     "inkTop": 616.5,
+     "inkBot": 632.5,
+     "ix0": 93.5,
+     "ix1": 220.5
+    }
+   ]
+  },
+  {
+   "y": 706.3,
+   "size": 9.6,
+   "inkTop": 709.5,
+   "inkBot": 722.5,
+   "x0": 222.4,
+   "x1": 388.4,
+   "parts": [
+    {
+     "x0": 222.4,
+     "x1": 388.4,
+     "size": 9.6,
+     "str": "SUBJECT TO MUMBAI JURISDICTION",
+     "inkTop": 709.5,
+     "inkBot": 722.5,
+     "ix0": 223,
+     "ix1": 387
+    }
+   ]
+  },
+  {
+   "y": 718.42,
+   "size": 9.6,
+   "inkTop": 715,
+   "inkBot": 729.5,
+   "x0": 232.2,
+   "x1": 378.4,
+   "parts": [
+    {
+     "x0": 232.2,
+     "x1": 378.4,
+     "size": 9.6,
+     "str": "This is a Computer Generated Invoice",
+     "inkTop": 715,
+     "inkBot": 729.5,
+     "ix0": 232,
+     "ix1": 378.5
+    }
+   ]
+  }
+ ],
+ "hRules": [
+  {
+   "y": 41,
+   "x1": 12.5,
+   "x2": 570.5
+  },
+  {
+   "y": 68,
+   "x1": 216,
+   "x2": 393.5
+  },
+  {
+   "y": 94.5,
+   "x1": 216,
+   "x2": 393.5
+  },
+  {
+   "y": 121.5,
+   "x1": 12.5,
+   "x2": 393.5
+  },
+  {
+   "y": 148.5,
+   "x1": 216,
+   "x2": 393.5
+  },
+  {
+   "y": 175,
+   "x1": 216,
+   "x2": 571
+  },
+  {
+   "y": 202,
+   "x1": 12.5,
+   "x2": 217
+  },
+  {
+   "y": 281.5,
+   "x1": 12.5,
+   "x2": 571
+  },
+  {
+   "y": 295,
+   "x1": 12.5,
+   "x2": 571
+  },
+  {
+   "y": 493.5,
+   "x1": 12.5,
+   "x2": 571
+  },
+  {
+   "y": 507,
+   "x1": 12.5,
+   "x2": 571
+  },
+  {
+   "y": 533.5,
+   "x1": 12.5,
+   "x2": 571
+  },
+  {
+   "y": 547,
+   "x1": 12.5,
+   "x2": 571
+  },
+  {
+   "y": 559.5,
+   "x1": 300,
+   "x2": 571
+  },
+  {
+   "y": 622,
+   "x1": 12.5,
+   "x2": 571
+  },
+  {
+   "y": 695,
+   "x1": 12.5,
+   "x2": 571
+  }
+ ],
+ "vRules": [
+  {
+   "x": 13.5,
+   "y1": 40,
+   "y2": 694.5
+  },
+  {
+   "x": 33.5,
+   "y1": 280.5,
+   "y2": 506.5
+  },
+  {
+   "x": 217.5,
+   "y1": 40,
+   "y2": 506.5
+  },
+  {
+   "x": 301,
+   "y1": 40,
+   "y2": 174.5
+  },
+  {
+   "x": 301,
+   "y1": 280.5,
+   "y2": 506.5
+  },
+  {
+   "x": 299.5,
+   "y1": 531,
+   "y2": 694.5
+  },
+  {
+   "x": 300,
+   "y1": 529,
+   "y2": 694.5
+  },
+  {
+   "x": 300.5,
+   "y1": 525.5,
+   "y2": 694.5
+  },
+  {
+   "x": 301,
+   "y1": 532,
+   "y2": 694.5
+  },
+  {
+   "x": 393.5,
+   "y1": 40,
+   "y2": 174.5
+  },
+  {
+   "x": 393.5,
+   "y1": 280.5,
+   "y2": 506.5
+  },
+  {
+   "x": 393.5,
+   "y1": 532.5,
+   "y2": 559
+  },
+  {
+   "x": 447.5,
+   "y1": 280.5,
+   "y2": 506.5
+  },
+  {
+   "x": 447.5,
+   "y1": 532.5,
+   "y2": 559
+  },
+  {
+   "x": 501,
+   "y1": 280.5,
+   "y2": 506.5
+  },
+  {
+   "x": 501,
+   "y1": 532.5,
+   "y2": 559
+  },
+  {
+   "x": 571,
+   "y1": 40,
+   "y2": 694.5
+  }
+ ]
+}

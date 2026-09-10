@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="O.N.S. OUTSOURCING SOLUTIONS" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <title>O.N.S. OUTSOURCING SOLUTIONS — Accounting</title>
+  </head>
+  <body>
+    <script>
+      // Fatal-error strip: shows the reason in gold text even if the whole
+      // app fails to load — so a problem can never be a silent black page.
+      (function () {
+        var div = null;
+        function show(msg) {
+          try {
+            if (!div) {
+              div = document.createElement('div');
+              div.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:999999;background:#241303;color:#ffd98f;border:1px solid #d4af37;border-radius:8px;padding:9px 12px;font:12px/1.5 monospace;white-space:pre-wrap;word-break:break-word;box-shadow:0 6px 24px rgba(0,0,0,.85)';
+              document.body.appendChild(div);
+            }
+            div.textContent = '⚠ ' + msg;
+            div.style.display = 'block';
+          } catch (_) { /* never block the page on this */ }
+        }
+        window.addEventListener('error', function (e) {
+          var m = (e && e.message) || 'unknown error';
+          if (e && e.error && e.error.stack) { var l = String(e.error.stack).split('\n')[1] || ''; m += '  ' + l.trim(); }
+          show(m);
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e && e.reason; var m = r && r.message ? String(r.message) : String(r);
+          if (r && r.stack) { var l = String(r.stack).split('\n')[1] || ''; m += '  ' + l.trim(); }
+          show('Promise failed: ' + m);
+        }, true);
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        navigator.serviceWorker.register('/sw.js').catch(function () { /* offline app is optional */ });
+      }
+    </script>
+  </body>
+</html>

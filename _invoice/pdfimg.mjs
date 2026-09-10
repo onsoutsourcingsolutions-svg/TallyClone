@@ -1,0 +1,13 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { createCanvas } from '@napi-rs/canvas';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+const buf = new Uint8Array(readFileSync('_invoice/PI-200-REFTECH.pdf'));
+const doc = await pdfjsLib.getDocument({ data: buf, verbosity: 0 }).promise;
+const page = await doc.getPage(1);
+const vp = page.getViewport({ scale: 2 });
+const canvas = createCanvas(Math.ceil(vp.width), Math.ceil(vp.height));
+const ctx = canvas.getContext('2d');
+ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, vp.width, vp.height);
+await page.render({ canvasContext: ctx, viewport: vp }).promise;
+writeFileSync('_invoice/page.png', canvas.toBuffer('image/png'));
+console.log('wrote _invoice/page.png', Math.ceil(vp.width), 'x', Math.ceil(vp.height));

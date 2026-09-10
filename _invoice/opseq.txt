@@ -1,0 +1,50 @@
+2 setFillRGBColor NaN
+12 setFillRGBColor NaN
+21 setFillRGBColor NaN
+30 setFillRGBColor NaN
+39 setFillRGBColor NaN
+48 setFillRGBColor NaN
+57 setFillRGBColor NaN
+66 setFillRGBColor NaN
+75 setFillRGBColor NaN
+85 setFillRGBColor NaN
+94 setFillRGBColor NaN
+103 setFillRGBColor NaN
+112 setFillRGBColor NaN
+121 setFillRGBColor NaN
+130 setFillRGBColor NaN
+139 setFillRGBColor NaN
+149 setFillRGBColor NaN
+158 setFillRGBColor NaN
+167 setFillRGBColor NaN
+176 setFillRGBColor NaN
+185 setFillRGBColor NaN
+194 setFillRGBColor NaN
+203 setFillRGBColor NaN
+212 setFillRGBColor NaN
+221 setFillRGBColor NaN
+230 setFillRGBColor NaN
+239 setFillRGBColor NaN
+248 setFillRGBColor NaN
+257 setFillRGBColor NaN
+266 setFillRGBColor NaN
+275 setFillRGBColor NaN
+284 setFillRGBColor NaN
+293 setFillRGBColor NaN
+302 setFillRGBColor NaN
+311 setFillRGBColor NaN
+320 setFillRGBColor NaN
+329 setFillRGBColor NaN
+338 setFillRGBColor NaN
+347 setFillRGBColor NaN
+356 setFillRGBColor NaN
+365 eoClip
+file:///home/user/TallyClone/_invoice/opseq.mjs:18
+    note = ' codes=[' + ops.map((c) => PathCodes[c] || c).join('') + '] style=' + JSON.stringify(style);
+                            ^
+
+TypeError: ops.map is not a function
+    at file:///home/user/TallyClone/_invoice/opseq.mjs:18:29
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+Node.js v22.22.3
