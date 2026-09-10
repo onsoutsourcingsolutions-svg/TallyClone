@@ -47,9 +47,17 @@ export async function parseWorkbook(buf, name = '') {
 
 // ---------------- export column builders ----------------
 const ITEM_COLS = [
-  ['name', 'Item name (REQUIRED)'], ['unit', 'Unit e.g. nos/kg/box'], ['hsn', 'HSN code'],
-  ['gst_rate', 'GST rate % e.g. 18 (blank = exempt)'], ['is_service', '0 = goods, 1 = service (no stock)'],
-  ['sale_account', 'Sales ledger for this item (blank = default)'], ['purchase_account', 'Purchase ledger (blank = default)'],
+  ['name', 'Item name (REQUIRED)'],
+  ['unit', 'Unit e.g. nos/kg/box'],
+  ['hsn', 'HSN code'],
+  ['gst_rate', 'GST rate % e.g. 18 (blank = exempt)'],
+  ['is_service', '0 = goods, 1 = service (no stock)'],
+  ['sale_account', 'Sales ledger for this item (blank = default)'],
+  ['purchase_account', 'Purchase ledger (blank = default)'],
+  ['qty', 'Opening stock qty you bought (optional — if filled, stock will be added with date)'],
+  ['rate', 'Rate per unit ₹ for opening stock (required if qty filled)'],
+  ['date', 'Date of buying YYYY-MM-DD for tracking buy vs sell age (optional, default = books begin)'],
+  ['narration', 'Batch / Supplier ref for this purchase (optional)'],
 ];
 const LEDGER_COLS = [
   ['name', 'Ledger name (REQUIRED)'], ['group', 'Group — pick from the list in Info sheet'],
@@ -106,8 +114,7 @@ export async function exportKindData(kind, c) {
         stock_qty: st ? st.qty : '', stock_value: st ? st.value / 100 : '',
       };
     });
-    const info = ['ITEMS IMPORT — one row per stock item/service.', 'gst_rate is a number like 18, 12, 5, 0 or 28. is_service: 0 or 1.',
-      'stock_qty / stock_value are shown for information only — enter opening quantities with the "Opening Stock" template instead.', 'Keep the header row. Delete example rows before importing.'];
+    const info = ['ITEMS IMPORT — SINGLE FORMAT: one row per item includes master + qty/rate/date/narration.', 'gst_rate: 18,12,5,0,28. is_service: 0=goods,1=service.', 'If you fill qty+rate in same row, stock is auto-added with that date for buy vs sell tracking. Grouped by date into Stock Journal vouchers.', 'stock_qty/stock_value shown for info only in this export — but you can now also import qty/rate/date/narration in the same file.', 'Keep the header row. Delete example rows before importing.'];
     return { buf: sheetOut(X, rows, 'Items', info), file: `${companyName}-items-${stamp}.xlsx` };
   }
   if (kind === 'stock') {
@@ -148,7 +155,7 @@ export async function exportKindTemplate(kind, c) {
   const X = await xlsxLib();
   const info = {
     ledgers: ['Fill one ledger per row. Required: name, group.', 'opening_type is Dr or Cr.', ...(kind === 'ledgers' ? GROUP_NAMES.map((g) => 'Group available: ' + g) : [])],
-    items: ['Fill one item per row. Required: name. Example row is marked EXAMPLE — delete it before importing.'],
+    items: ['SINGLE FORMAT: one row per item — master + opening stock + date in SAME file. Required: name.', 'If you fill qty+rate in same row, stock is auto-added with that date for buy vs sell age tracking.', 'Optional: qty, rate, date (YYYY-MM-DD), narration (batch/supplier). Example row is marked EXAMPLE — delete it before importing.'],
     stock: ['Fill one item per row. Required: item_name (must exist), qty, rate.', 'Optional: date = date of buying YYYY-MM-DD for tracking buy vs sell age. If blank, uses the date you choose in the import screen.', 'Optional: narration = batch / supplier ref.'],
     vouchers: ['Fill one voucher per row. class: Receipt / Payment / Contra / Journal. Each row must balance.'],
   }[kind];
@@ -169,13 +176,13 @@ export async function exportKindSample(kind, c) {
   if (kind !== 'items') throw vErr('A sample file is available for Stock Items only.');
   const companyName = String(c ? c.name : 'ONS').replace(/[\\/:*?"<>|]+/g, '-').trim();
   const rows = [
-    { name: 'EXAMPLE-1  Steel Rod 12mm — rename to your real item name', unit: 'qty', hsn: '7214', gst_rate: 18, is_service: 0, sale_account: 'Sales', purchase_account: 'Purchases' },
-    { name: 'EXAMPLE-2  Cement 43 grade 50kg — rename to your real item name', unit: 'bag', hsn: '2523', gst_rate: 28, is_service: 0, sale_account: '', purchase_account: '' },
-    { name: 'EXAMPLE-3  Door fabrication (service) — rename to your real service name', unit: '', hsn: '9987', gst_rate: 18, is_service: 1, sale_account: '', purchase_account: '' },
-    { name: 'EXAMPLE-4  already-existing item — rename to an existing item name to UPDATE it', unit: 'nos', hsn: '', gst_rate: 12, is_service: 0, sale_account: '', purchase_account: '' },
+    { name: 'EXAMPLE-1  Steel Rod 12mm — rename to your real item name', unit: 'qty', hsn: '7214', gst_rate: 18, is_service: 0, sale_account: 'Sales', purchase_account: 'Purchases', qty: 100, rate: 80.5, date: '2026-08-10', narration: 'Batch A / Supplier XYZ' },
+    { name: 'EXAMPLE-2  Cement 43 grade 50kg — rename to your real item name', unit: 'bag', hsn: '2523', gst_rate: 28, is_service: 0, sale_account: '', purchase_account: '', qty: 50, rate: 350, date: '2026-08-15', narration: 'Godown 1' },
+    { name: 'EXAMPLE-3  Door fabrication (service) — rename to your real service name', unit: '', hsn: '9987', gst_rate: 18, is_service: 1, sale_account: '', purchase_account: '', qty: '', rate: '', date: '', narration: '' },
+    { name: 'EXAMPLE-4  already-existing item — rename to an existing item name to UPDATE it', unit: 'nos', hsn: '', gst_rate: 12, is_service: 0, sale_account: '', purchase_account: '', qty: 20, rate: 120, date: '2026-08-20', narration: 'Opening from old books' },
   ];
   const mapping = [
-    'SAMPLE FILE — how to fill the Stock Items upload (same columns as the real upload)',
+    'SAMPLE FILE — SINGLE FORMAT: how to fill the Stock Items upload (master + stock + date in ONE file)',
     '',
     'ADD or UPDATE when you upload:',
     '  ADD    -> names that do not exist yet are CREATED. Names that already exist are SKIPPED.',
@@ -191,14 +198,19 @@ export async function exportKindSample(kind, c) {
     '  is_service      -> 0 = goods (stock quantity is tracked), 1 = service (no stock)',
     '  sale_account    -> name of the ledger used when this item is sold (blank = default Sales)',
     '  purchase_account-> name of the ledger used when this item is bought (blank = default Purchases)',
+    '  qty             -> NEW: opening stock qty you already hold (optional). If filled with rate, stock will be auto-added.',
+    '  rate            -> NEW: rate per unit ₹ for opening stock (required if qty filled).',
+    '  date            -> NEW: date of buying YYYY-MM-DD for tracking buy vs sell age (optional, default = today/books begin). Grouped by date — each different date creates its own Stock Journal voucher.',
+    '  narration       -> NEW: batch / supplier ref / remarks for this purchase (optional).',
     '',
-    'NOT read on upload (they only appear when you export "My current items"): stock_qty, stock_value.',
-    'To enter opening stock quantities/rates use the Opening Stock workbook (Data -> Import/Export).',
+    'SINGLE FORMAT EXAMPLE: fill name,unit,hsn,gst_rate,qty,rate,date,narration in same row and upload once.',
+    'No need for a second Opening Stock file — this ONE file does master + stock + date together. No secondary system.',
+    'Grouped by date: each different date creates its own Stock Journal voucher for buy vs sell age tracking.',
     'Files may be .xlsx, .xls or .csv with this same header row.',
   ];
   const wb = X.utils.book_new();
   const ws = X.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 58 }, { wch: 9 }, { wch: 9 }, { wch: 10 }, { wch: 11 }, { wch: 15 }, { wch: 18 }];
+  ws['!cols'] = [{ wch: 58 }, { wch: 9 }, { wch: 9 }, { wch: 10 }, { wch: 11 }, { wch: 15 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 22 }];
   X.utils.book_append_sheet(wb, ws, 'Sample');
   const ms = X.utils.aoa_to_sheet(mapping.map((t) => [t]));
   ms['!cols'] = [{ wch: 118 }];
@@ -295,6 +307,47 @@ export function importKind(kind, c, rows, { mode = 'add', date, counterpart_id }
       created.push(name);
     }
   } else if (kind === 'items') {
+    // SINGLE FORMAT: item master + opening stock qty/rate/date in same row
+    // If qty+rate provided, stock is auto-added with date for buy vs sell tracking
+    const stockGrouped = new Map(); // date -> lines
+    const parseRowDate = (r) => {
+      const raw = N(r.date || r.buy_date || r.buying_date || r.purchase_date || r.bought_on || r.purchased_on || r.stock_date || '');
+      if (!raw) return null;
+      if (validISO(raw)) return raw;
+      const m1 = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+      if (m1) {
+        const iso = `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+        if (validISO(iso)) return iso;
+      }
+      const m2 = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+      if (m2) {
+        const iso = `${m2[1]}-${m2[2].padStart(2,'0')}-${m2[3].padStart(2,'0')}`;
+        if (validISO(iso)) return iso;
+      }
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) {
+        const iso = d.toISOString().slice(0,10);
+        if (validISO(iso)) return iso;
+      }
+      return null;
+    };
+    const findStockCtr = () => {
+      if (counterpart_id) {
+        const ctr = db.prepare('SELECT * FROM accounts WHERE id = ? AND company_id = ? AND active = 1').get(Number(counterpart_id), c.id);
+        if (ctr) return ctr;
+      }
+      const candidates = ['Opening Stock','Stock Opening','Reserves & Surplus','Reserves and Surplus','Capital','Capital Account','Opening Balance','Opening Stock Adjustment'];
+      for (const nm of candidates) {
+        const acc = db.prepare('SELECT * FROM accounts WHERE company_id = ? AND lower(name) = lower(?) AND active = 1').get(c.id, nm);
+        if (acc) return acc;
+      }
+      const acc = db.prepare(`SELECT * FROM accounts WHERE company_id = ? AND active = 1 AND group_code IN ('reserves_surplus','capital','other_current_liab','current_liab') ORDER BY id LIMIT 1`).get(c.id);
+      if (acc) return acc;
+      const any = db.prepare(`SELECT * FROM accounts WHERE company_id = ? AND active = 1 AND type = 'Liability' ORDER BY id LIMIT 1`).get(c.id);
+      if (any) return any;
+      const r = db.prepare(`INSERT INTO accounts(company_id,name,group_code,type,kind,active,created_at,opening_balance,opening_balance_date) VALUES(?,?,?,?,?,?,?,0,?)`).run(c.id, 'Opening Stock Adjustment', 'reserves_surplus', 'Liability', 'General', 1, todayISO(), c.books_begin_from);
+      return db.prepare('SELECT * FROM accounts WHERE id = ?').get(r.lastInsertRowid);
+    };
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const name = N(r.name);
@@ -306,18 +359,61 @@ export function importKind(kind, c, rows, { mode = 'add', date, counterpart_id }
       const purchAcc = findAccount(c, r.purchase_account);
       if (N(r.sale_account) && !saleAcc) { pushErr(i, `sale_account "${N(r.sale_account)}" not found — create that ledger first.`); continue; }
       if (N(r.purchase_account) && !purchAcc) { pushErr(i, `purchase_account "${N(r.purchase_account)}" not found — create that ledger first.`); continue; }
+      let itemId;
       const existing = db.prepare('SELECT id FROM items WHERE company_id = ? AND name = ?').get(c.id, name);
       if (existing) {
         if (mode === 'update') {
           db.prepare('UPDATE items SET unit=?, hsn=?, gst_rate=?, is_service=?, sale_account_id=?, purchase_account_id=? WHERE id=?')
             .run(N(r.unit, 'nos'), N(r.hsn).toUpperCase(), gst, isSvc ? 1 : 0, saleAcc ? saleAcc.id : null, purchAcc ? purchAcc.id : null, existing.id);
           updated.push(name);
-        } else skipped.push(`${i + 2}: already exists`);
-        continue;
+          itemId = existing.id;
+        } else {
+          skipped.push(`${i + 2}: already exists`);
+          itemId = existing.id;
+        }
+      } else {
+        const ins = db.prepare('INSERT INTO items(company_id,name,unit,hsn,gst_rate,is_service,sale_account_id,purchase_account_id,active,created_at) VALUES(?,?,?,?,?,?,?,?,1,?)')
+          .run(c.id, name, N(r.unit, 'nos'), N(r.hsn).toUpperCase(), gst, isSvc ? 1 : 0, saleAcc ? saleAcc.id : null, purchAcc ? purchAcc.id : null, todayISO());
+        itemId = Number(ins.lastInsertRowid);
+        created.push(name);
       }
-      db.prepare('INSERT INTO items(company_id,name,unit,hsn,gst_rate,is_service,sale_account_id,purchase_account_id,active,created_at) VALUES(?,?,?,?,?,?,?,?,1,?)')
-        .run(c.id, name, N(r.unit, 'nos'), N(r.hsn).toUpperCase(), gst, isSvc ? 1 : 0, saleAcc ? saleAcc.id : null, purchAcc ? purchAcc.id : null, todayISO());
-      created.push(name);
+      // If qty+rate provided in same row, treat as opening stock with date
+      const qty = NUM(r.qty);
+      const rate = NUM(r.rate);
+      if (qty !== null && rate !== null && !isSvc) {
+        if (!(qty > 0)) { pushErr(i, `qty must be a positive number if provided.`); continue; }
+        if (!(rate > 0)) { pushErr(i, `rate must be a positive number if qty provided.`); continue; }
+        let d = parseRowDate(r);
+        if (!d) d = date || todayISO();
+        const de = dateInBook(c, d);
+        if (de) { pushErr(i, `date ${d}: ${de}`); continue; }
+        const narr = N(r.narration || r.batch || r.supplier || r.ref || '');
+        if (!stockGrouped.has(d)) stockGrouped.set(d, []);
+        stockGrouped.get(d).push({ item_id: itemId, qty, ratePaise: toPaise(rate), narration: narr, item_name: name });
+      }
+    }
+    // create stock vouchers grouped by date if any qty provided
+    if (stockGrouped.size) {
+      const ctr = findStockCtr();
+      if (!ctr) throw vErr('No balancing account for opening stock — create a Reserves & Surplus / Capital ledger first.');
+      for (const [vdate, lines] of stockGrouped.entries()) {
+        tx(() => {
+          const no = nextVoucherNo(c.id, 'stock_journal');
+          const combinedNarr = lines.some(l => l.narration) ? `Stock import ${vdate} — ${lines.map(l => l.narration).filter(Boolean).join(', ').slice(0,120)}` : `Opening stock import (${lines.length} lines) on ${vdate} — from items import`;
+          const r = db.prepare(`INSERT INTO vouchers(company_id,class,voucher_no,date,number,narration,ref,ref_date,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`).run(c.id, 'stock_journal', no, vdate, '', combinedNarr, '', null, todayISO(), todayISO());
+          const vid = Number(r.lastInsertRowid);
+          const invId = companyExtras(c).inventory_account_id;
+          const totalVal = lines.reduce((s, l) => s + Math.round(l.ratePaise * l.qty), 0);
+          let ln = 0;
+          const insIE = db.prepare('INSERT INTO item_entries(voucher_id,company_id,line_no,item_id,qty,rate,amount,direction) VALUES(?,?,?,?,?,?,?,?)');
+          for (const l of lines) insIE.run(vid, c.id, ln++, l.item_id, l.qty, l.ratePaise, Math.round(l.ratePaise * l.qty), 'in');
+          const insE = db.prepare('INSERT INTO entries(voucher_id,company_id,line_no,account_id,debit,credit,particulars,taxable,is_stock) VALUES(?,?,?,?,?,?,?,?,?)');
+          insE.run(vid, c.id, ln++, invId, totalVal, 0, 'To Stock (opening import from items)', null, 1);
+          insE.run(vid, c.id, ln++, ctr.id, 0, totalVal, 'By ' + ctr.name, null, 0);
+          db.prepare('INSERT INTO edit_log(company_id,voucher_id,action,at,old_json,new_json) VALUES(?,?,?,?,?,?)').run(c.id, vid, 'create', todayISO(), null, JSON.stringify({ via: 'items-import-with-stock', lines: lines.length, total: totalVal }));
+          created.push(`Stock ${lines.length} lines on ${vdate}`);
+        });
+      }
     }
   } else if (kind === 'stock') {
     // Stock import now supports per-row buying date for tracking buy vs sell age

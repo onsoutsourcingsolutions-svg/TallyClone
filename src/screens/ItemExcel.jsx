@@ -10,6 +10,10 @@ const MAP = [
   ['is_service', '0 = goods (stock qty tracked) · 1 = service (no stock)', '', '0'],
   ['sale_account', 'Sales ledger used when this item is sold (blank = default)', '', 'Sales'],
   ['purchase_account', 'Purchase ledger used when this item is bought (blank = default)', '', 'Purchases'],
+  ['qty', 'Opening stock qty you bought — if filled, stock added with date (single format)', '', '1000'],
+  ['rate', 'Rate per unit ₹ for opening stock (required if qty filled)', '', '80.5'],
+  ['date', 'Date of buying YYYY-MM-DD — for buy vs sell age tracking', '', '2026-06-15'],
+  ['narration', 'Batch / Supplier ref for this purchase', '', 'Batch Jun / Supplier A'],
 ];
 
 export function ItemExcelPanel({ onImported }) {
@@ -45,11 +49,11 @@ export function ItemExcelPanel({ onImported }) {
 
   return (
     <div className="card">
-      <h3>⇅ Excel — add / update many items at once</h3>
+      <h3>⇅ Excel — add / update many items at once (single format with stock + date)</h3>
       <p className="muted" style={{ fontSize: 13, margin: '0 0 10px' }}>
-        Download the <b>sample file</b> to see the exact format with example rows (and one row that shows how an
-        update works). It is the same file format every time. Or export <b>my current items</b>, edit them in Excel
-        and upload back with <b>Update</b> to change many items together.
+        <b>Single format</b> — one Excel does everything: item master + opening stock qty/rate + <b>date of buying</b> for buy vs sell tracking.
+        Fill <code>name, unit, hsn, gst_rate, qty, rate, date, narration</code> in one row. If qty+rate filled, stock is auto-added with that date.
+        No secondary system needed. Download the <b>sample file</b> to see exact format. Or export <b>my current items</b>, edit and upload back with <b>Update</b>.
       </p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
         <a className="btn" href="/api/export/items?mode=sample">⬇ Sample file (examples + mapping)</a>
@@ -63,7 +67,7 @@ export function ItemExcelPanel({ onImported }) {
           {MAP.map(([col, what, need, ex]) => (
             <tr key={col}><td><span style={{ fontFamily: 'monospace', color: 'var(--gold-hi)' }}>{col}</span></td><td className="muted">{what}</td><td className="tright">{need === '✔' ? <b style={{ color: 'var(--ok)' }}>yes</b> : <span className="faint">no</span>}</td><td className="muted">{ex}</td></tr>
           ))}
-          <tr><td><span className="faint" style={{ fontFamily: 'monospace' }}>stock_qty / stock_value</span></td><td className="faint">Only in the “My current items” export — NOT read when you upload. Enter quantities via the Opening Stock workbook.</td><td></td><td></td></tr>
+          <tr><td><span className="faint" style={{ fontFamily: 'monospace' }}>stock_qty / stock_value</span></td><td className="faint">Only in “My current items” export — shows current stock for reference. To add opening stock, just fill qty/rate/date/narration in THIS same file — no second file needed.</td><td></td><td></td></tr>
         </tbody>
       </table>
 
@@ -131,7 +135,7 @@ export function ItemExcelPanel({ onImported }) {
             </div>
           )}
           {(result.created > 0 || result.updated > 0) && (
-            <p className="muted" style={{ fontSize: 13 }}>Done ✓ — the table above is refreshed. Next step for quantities: <b>Data → Import / Export → Opening Stock</b>.</p>
+            <p className="muted" style={{ fontSize: 13 }}>Done ✓ — items + opening stock (with buying date) imported in one go. Stock appears in Home inventory KPIs and Day Book → Stock Journal grouped by date for buy vs sell age tracking.</p>
           )}
         </div>
       )}

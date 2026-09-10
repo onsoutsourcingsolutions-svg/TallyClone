@@ -1,36 +1,27 @@
 import { useEffect, useState } from 'react';
 import { api, useApp } from '../state.jsx';
-import { todayISO } from '../fmt.js';
 
 const KINDS = {
   ledgers: {
     label: 'Ledgers', icon: '☰', order: 1,
     hint: 'Parties, banks, expenses, income — with opening balances. One row = one ledger.',
-    tips: 'Do this FIRST: it creates the ledgers your items, stock and vouchers will refer to. Required: name + group (pick the exact group name from the template’s Info sheet).',
+    tips: 'Do this FIRST: it creates the ledgers your items and vouchers will refer to. Required: name + group (pick the exact group name from the template’s Info sheet).',
   },
   items: {
-    label: 'Stock Items', icon: '▤', order: 2,
-    hint: 'All your stock items & services with unit, HSN and GST rate — add thousands at once.',
-    tips: 'Required: name. GST rate is a number (18, 5, 0…). After items come in, use Opening Stock to enter their quantities.',
-  },
-  stock: {
-    label: 'Opening Stock', icon: '⇅', order: 3,
-    hint: 'Bring in the quantities you already hold — now with date of buying per row for tracking buy vs sell age.',
-    tips: 'Item names must already exist (import Items first). NEW: add a date column (YYYY-MM-DD) per row for when you bought the goods — if blank, uses the date you choose below. You also have narration/batch. Balancing account is usually Reserves & Surplus / Capital. Each different date creates its own Stock Journal voucher.',
+    label: 'Stock Items — SINGLE FORMAT', icon: '▤', order: 2,
+    hint: 'ONE file does everything: item master + opening qty/rate + date of buying + narration for buy vs sell age tracking.',
+    tips: 'SINGLE FORMAT — no second file needed: name (required), unit, hsn, gst_rate, is_service, qty, rate, date (YYYY-MM-DD when you bought it), narration/batch. If qty+rate filled, stock is auto-added grouped by date into Stock Journal vouchers. This is the ONLY place you need to add opening stock now. No secondary Opening Stock import.',
   },
   vouchers: {
-    label: 'Vouchers', icon: '✎', order: 4,
+    label: 'Vouchers', icon: '✎', order: 3,
     hint: 'Receipt / Payment / Contra / Journal entries — one row per voucher, debit & credit side in one row.',
     tips: 'Each row must balance (dr_amount = cr_amount). Account names must already exist. Dates must be inside the books period.',
   },
 };
 
 export function DataScreen() {
-  const { company, notify } = useApp();
+  const { notify } = useApp();
   const [kind, setKind] = useState('items');
-  const [accounts, setAccounts] = useState([]);
-  const [date, setDate] = useState(company ? company.books_begin_from : todayISO());
-  const [ctrId, setCtrId] = useState('');
   const [mode, setMode] = useState('add');
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -38,11 +29,9 @@ export function DataScreen() {
   const [err, setErr] = useState('');
   const [file, setFile] = useState(null);
 
-  useEffect(() => { api('/accounts').then((j) => setAccounts(j.rows)).catch(() => setAccounts([])); }, []);
   useEffect(() => { setPreview(null); setResult(null); setErr(''); setFile(null); }, [kind]);
 
   const meta = KINDS[kind];
-  const stockLike = kind === 'stock';
 
   const doUpload = async (f, asPreview) => {
     if (!f) return;
@@ -51,7 +40,6 @@ export function DataScreen() {
       const fd = new FormData();
       fd.append('file', f);
       fd.append('mode', mode);
-      if (stockLike) { fd.append('date', date); if (ctrId) fd.append('counterpart_id', ctrId); }
       fd.append('preview', asPreview ? '1' : '0');
       const r = await fetch('/api/import/' + kind, { method: 'POST', body: fd });
       const j = await r.json().catch(() => ({}));
@@ -59,7 +47,7 @@ export function DataScreen() {
       if (asPreview) { setPreview(j); setResult(null); }
       else {
         setResult(j);
-        if (j.created) notify(`${kind === 'stock' ? 'Opening stock' : 'Imported'} ✓ ${j.created} created · ${j.updated} updated`);
+        if (j.created || j.updated) notify(`Imported ✓ ${j.created} created · ${j.updated} updated`);
       }
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -72,7 +60,7 @@ export function DataScreen() {
       <p className="muted" style={{ marginTop: -6, fontSize: 13.5 }}>
         Download a template <b>once</b> — it always keeps the same format. Fill it in Excel (or export your
         current data, edit, and import back). Upload here and the rows are added to your books. Works with
-        .xlsx, .xls and .csv.
+        .xlsx, .xls and .csv. <b>Stock Items is now SINGLE FORMAT</b> — item master + qty/rate/date/narration in ONE file, no second file.
       </p>
       <div className="tiles" style={{ margin: '14px 0' }}>
         {Object.keys(KINDS).sort((a, b) => KINDS[a].order - KINDS[b].order).map((k) => (
@@ -86,28 +74,13 @@ export function DataScreen() {
       <div className="card">
         <h3>{meta.icon} {meta.label} — import</h3>
         <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>{meta.hint}</p>
-        {stockLike ? (
-          <div className="frow" style={{ marginBottom: 10 }}>
-            <label className="f"><span>Date of opening stock</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-            <label className="f"><span>Balancing account *</span>
-              <select value={ctrId} onChange={(e) => setCtrId(e.target.value)}>
-                <option value="">— choose —</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.group_code.replace(/_/g, ' ')})</option>
-                ))}
-              </select>
-            </label>
-            <div className="faint" style={{ fontSize: 11.5, alignSelf: 'end', paddingBottom: 8 }}>Tip: opening stock is normally balanced against Capital / Reserves &amp; Surplus — create that ledger in Ledgers first if missing.</div>
-          </div>
-        ) : (
-          <label className="f" style={{ maxWidth: 420 }}>
-            <span>If an item/ledger name already exists</span>
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="add">Skip it (keep existing)</option>
-              <option value="update">Update it (change details)</option>
-            </select>
-          </label>
-        )}
+        <label className="f" style={{ maxWidth: 420 }}>
+          <span>If an item/ledger name already exists</span>
+          <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="add">Skip it (keep existing)</option>
+            <option value="update">Update it (change details)</option>
+          </select>
+        </label>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <label className="btn" style={{ cursor: 'pointer' }}>
             {busy ? 'Working…' : '📂 Choose .xlsx / .csv file'}
@@ -119,6 +92,7 @@ export function DataScreen() {
           </label>
           <a className="btn ghost" href={`/api/export/${kind}?mode=template`}>⬇ Template (empty)</a>
           <a className="btn ghost" href={`/api/export/${kind}`}>⬇ My current data</a>
+          {kind === 'items' && <a className="btn" href={`/api/export/items?mode=sample`}>⬇ Sample with qty/rate/date</a>}
         </div>
         <p className="ledger-hint" style={{ marginTop: 10 }}>{meta.tips}</p>
       </div>
@@ -161,7 +135,7 @@ export function DataScreen() {
             <div className="kpi"><div className="k">Skipped</div><div className="v">{result.skipped}</div></div>
             <div className="kpi"><div className="k">Problems</div><div className="v" style={{ color: result.errors && result.errors.length ? '#e0a06b' : 'var(--ok)' }}>{result.errors ? result.errors.length : 0}</div></div>
           </div>
-          {result.created > 0 && <p className="muted" style={{ fontSize: 13 }}>Done ✓ — rows imported. {kind === 'stock' && 'Stock is now in the books (see Day Book → Stock Journal).'}</p>}
+          {result.created > 0 && <p className="muted" style={{ fontSize: 13 }}>Done ✓ — rows imported. {kind === 'items' && 'Opening stock with buying date is now in the books (Home KPIs + Day Book → Stock Journal grouped by date). No secondary file needed.'}</p>}
           {result.errors && result.errors.length > 0 && (
             <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--gold-line-soft)', borderRadius: 6 }}>
               {result.errors.slice(0, 50).map((e, i) => <div key={i} style={{ padding: '4px 8px', fontSize: 12.5, color: '#e0a06b', borderBottom: '1px solid var(--gold-line-soft)' }}>⚠ {e}</div>)}
