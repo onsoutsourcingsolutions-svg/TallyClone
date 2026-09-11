@@ -676,8 +676,10 @@ api.post('/update/apply', async (req, res) => {
       try {
         if (process.platform === 'win32') {
           const bat = path.join(APP_ROOT, '_apply-restart.bat');
+          // Fix for space in path like ADITYA MISHRA — %~dp0. avoids trailing \ escaping quote, this caused Windows cannot find '\C:\Users\ADITYA'
           fs.writeFileSync(bat,
-            '@echo off\r\ncd /d "%~dp0"\r\ntimeout /t 3 /nobreak >nul\r\nnode server\\run.js\r\n');
+            '@echo off\r\ncd /d "%~dp0."
+timeout /t 3 /nobreak >nul\r\nstart "" /b node server\\run.js\r\n');
           const p = spawn('cmd.exe', ['/c', 'start', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore' });
           p.unref();
         } else {
