@@ -470,13 +470,34 @@ api.get('/rates', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
-// ---------- GSTIN verification & auto-pull ----------
+// ---------- GSTIN verification & auto-pull (with live captcha flow) ----------
+import { getGSTCaptcha, verifyGSTINWithCaptcha } from './gst.js';
+
 api.get('/gst/verify', async (req, res) => {
   try {
     const gstin = String(req.query.gstin || '').trim().toUpperCase();
     if (!gstin) throw new Error('GSTIN is required - e.g. 27ABCDE1234F1Z5');
     const result = await verifyGSTIN(gstin);
     ok(res, result);
+  } catch (e) { fail(res, e); }
+});
+
+api.post('/gst/verify', async (req, res) => {
+  try {
+    const { gstin, captcha, captcha_id, captcha_cookie } = req.body || {};
+    const g = String(gstin || '').trim().toUpperCase();
+    const cap = String(captcha || '').trim();
+    if (!g) throw new Error('GSTIN required');
+    if (!cap) throw new Error('Captcha required - get captcha first via GET /api/gst/captcha');
+    const result = await verifyGSTINWithCaptcha(g, cap, { captcha_id, captcha_cookie });
+    ok(res, result);
+  } catch (e) { fail(res, e); }
+});
+
+api.get('/gst/captcha', async (req, res) => {
+  try {
+    const cap = await getGSTCaptcha();
+    ok(res, cap);
   } catch (e) { fail(res, e); }
 });
 
@@ -676,8 +697,12 @@ api.post('/update/apply', async (req, res) => {
       try {
         if (process.platform === 'win32') {
           const bat = path.join(APP_ROOT, '_apply-restart.bat');
-          // Fix for space in path like ADITYA MISHRA - %~dp0. avoids trailing \\ escaping quote, this caused Windows cannot find '\\C:\\Users\\ADITYA'
-                    fs.writeFileSync(bat, "@echo off\r\ncd /d \"%~dp0.\"\r\ntimeout /t 3 /nobreak >nul\r\nstart \"\" /b node server\\run.js\r\n");
+          // Fix for space in path like ADITYA MISHRA - %~dp0. avoids trailing \ escaping quote, this caused Windows cannot find '\C:\Users\ADITYA'
+          fs.writeFileSync(bat, "@echo off\r\ncd /d \"%~dp0.\"\r\ntimeout /t 3 /nobreak >nul\r\nstart \"\" /b node server\\run.js\r\n");
+          const p = spawn('cmd.exe', ['/c', 'start', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore' });
+          p.unref();
+        } else {
+          const p = spawn('/bin/sh', ['-c', 'sleep 3; npm run build; exec node server/run.js'], { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
           p.unref();
         }
       } catch (_) { /* nothing else we can do */ }

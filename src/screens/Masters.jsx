@@ -35,6 +35,8 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
     return secs;
   }, [chart]);
 
+  const [captcha, setCaptcha] = useState({ id: '', img: '', loading: false, value: '' });
+
   const verifyGst = async () => {
     const g = String(f.gstin || '').trim().toUpperCase();
     if (!g) { setErr('Enter GSTIN first — e.g. 27ABCDE1234F1Z5'); return; }
@@ -44,9 +46,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
       const j = await api('/gst/verify?gstin=' + encodeURIComponent(g));
       if (!j.ok) throw new Error(j.error || 'GST verification failed');
       setGstState({ loading: false, data: j, error: '' });
-      // auto-fill PAN from GSTIN
       if (j.pan && !f.pan) setF(prev => ({ ...prev, pan: j.pan }));
-      // if details available, suggest auto-fill
       if (j.details) {
         const d = j.details;
         if (d.trade_name || d.legal_name) {
@@ -56,10 +56,50 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
         }
       } else {
         notify(`GSTIN ✓ ${j.state_name} — valid. ${j.message || ''}`);
+        // auto-fetch captcha if needs live
+        if (j.needs_captcha) fetchCaptcha();
       }
     } catch (e) {
       setGstState({ loading: false, data: null, error: e.message });
       setErr(e.message);
+    }
+  };
+
+  const fetchCaptcha = async () => {
+    setCaptcha(c => ({ ...c, loading: true }));
+    setErr('');
+    try {
+      const j = await api('/gst/captcha');
+      if (!j.ok) throw new Error(j.error || 'Could not get captcha from GST portal');
+      setCaptcha({ id: j.captcha_id, img: j.data_uri || `data:${j.mime};base64,${j.image_base64}`, loading: false, value: '' });
+      notify('Captcha loaded from GST portal — enter the 6 characters');
+    } catch (e) {
+      setCaptcha(c => ({ ...c, loading: false }));
+      setErr(e.message);
+    }
+  };
+
+  const verifyWithCaptcha = async () => {
+    const g = String(f.gstin || '').trim().toUpperCase();
+    if (!g) { setErr('Enter GSTIN first'); return; }
+    if (!captcha.value.trim()) { setErr('Enter captcha shown in image'); return; }
+    setGstState({ loading: true, data: null, error: '' });
+    setErr('');
+    try {
+      const j = await api('/gst/verify', { method: 'POST', body: { gstin: g, captcha: captcha.value.trim(), captcha_id: captcha.id } });
+      if (!j.ok) throw new Error(j.error || 'GST verification with captcha failed');
+      setGstState({ loading: false, data: j, error: '' });
+      if (j.pan && !f.pan) setF(prev => ({ ...prev, pan: j.pan }));
+      if (j.details) {
+        const d = j.details;
+        notify(`GSTIN Live ✓ ${d.trade_name || d.legal_name} — ${j.state_name} — fetched from GST portal`);
+      }
+      setCaptcha({ id: '', img: '', loading: false, value: '' });
+    } catch (e) {
+      setGstState({ loading: false, data: gstState.data, error: e.message });
+      setErr(e.message);
+      // on invalid captcha, auto refresh
+      if (/captcha/i.test(e.message)) fetchCaptcha();
     }
   };
 
@@ -140,7 +180,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
           {gstState.data && (
             <div style={{ border: '1px solid var(--gold-line-soft)', borderRadius: 8, padding: 10, marginBottom: 10, background: 'var(--gold-soft)' }}>
               <div style={{ fontSize: 12.5 }}>
-                <b style={{ color: 'var(--ok)' }}>✓ GSTIN Valid — {gstState.data.state_name} ({gstState.data.state_code}) · PAN {gstState.data.pan} {gstState.data.verified ? '· Verified live from GST portal' : '· Format valid (offline)'}</b>
+                <b style={{ color: 'var(--ok)' }}>✓ GSTIN Valid — {gstState.data.state_name} ({gstState.data.state_code}) · PAN {gstState.data.pan} {gstState.data.verified ? '· Verified LIVE from GST portal' : '· Format valid'}</b>
                 {gstState.data.details && (
                   <>
                     <div style={{ marginTop: 6 }}><b>Legal:</b> {gstState.data.details.legal_name || '—'} · <b>Trade:</b> {gstState.data.details.trade_name || '—'}</div>
@@ -150,6 +190,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
                       {gstState.data.details.registration_date && <>Reg. Date: {gstState.data.details.registration_date} · </>}
                       {gstState.data.details.taxpayer_type && <>Type: {gstState.data.details.taxpayer_type}</>}
                       {gstState.data.details.pincode && <> · Pincode: {gstState.data.details.pincode}</>}
+                      {gstState.data.details.business_nature && <><br/>Nature: {gstState.data.details.business_nature}</>}
                     </div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                       <button className="btn sm" onClick={() => applyGstDetails(true)}>Use Trade Name + Address</button>
@@ -157,7 +198,35 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
                     </div>
                   </>
                 )}
-                {!gstState.data.details && gstState.data.message && <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>{gstState.data.message}</div>}
+                {!gstState.data.details && (
+                  <div style={{ marginTop: 8 }}>
+                    <div className="faint" style={{ fontSize: 12, marginBottom: 6 }}>{gstState.data.message}</div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button className="btn sm" onClick={fetchCaptcha} disabled={captcha.loading}>{captcha.loading ? 'Loading captcha...' : '🔐 Get Captcha & Fetch Live'}</button>
+                      {captcha.img && (
+                        <>
+                          <img src={captcha.img} alt="GST captcha" style={{ height: 38, border: '1px solid #ccc', borderRadius: 4, background: '#fff' }} />
+                          <input value={captcha.value} onChange={(e) => setCaptcha(c => ({ ...c, value: e.target.value }))} placeholder="Enter 6 chars" style={{ width: 110, textTransform: 'uppercase' }} maxLength={6} />
+                          <button className="btn sm" onClick={verifyWithCaptcha} disabled={gstState.loading}>{gstState.loading ? 'Fetching...' : '✓ Fetch Live Details'}</button>
+                          <button className="btn ghost sm" onClick={fetchCaptcha}>↻ Refresh</button>
+                        </>
+                      )}
+                    </div>
+                    <div className="faint" style={{ fontSize: 10.5, marginTop: 4 }}>Live data comes directly from services.gst.gov.in — requires internet + captcha. If portal is down, you can still save with offline validation.</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Show captcha even if no gstState yet but user clicked */}
+          {!gstState.data && captcha.img && (
+            <div style={{ border: '1px dashed var(--gold-line-soft)', borderRadius: 8, padding: 10, marginBottom: 10, background: '#fffbe6' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12 }}>GST Portal Captcha:</span>
+                <img src={captcha.img} alt="GST captcha" style={{ height: 38, border: '1px solid #ccc', borderRadius: 4, background: '#fff' }} />
+                <input value={captcha.value} onChange={(e) => setCaptcha(c => ({ ...c, value: e.target.value }))} placeholder="Enter 6 chars" style={{ width: 110, textTransform: 'uppercase' }} maxLength={6} />
+                <button className="btn sm" onClick={verifyWithCaptcha} disabled={gstState.loading}>{gstState.loading ? 'Fetching...' : '✓ Fetch Live'}</button>
+                <button className="btn ghost sm" onClick={fetchCaptcha}>↻ Refresh</button>
               </div>
             </div>
           )}
