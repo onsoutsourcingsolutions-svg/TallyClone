@@ -370,7 +370,7 @@ api.post('/import/:kind', fileUpload.single('file'), async (req, res) => {
   const kind = req.params.kind;
   if (!DATA_KINDS.has(kind)) return fail(res, new Error('Unknown import kind.'));
   try {
-    if (!req.file) throw new Error('No file received — choose an .xlsx / .csv file first.');
+    if (!req.file) throw new Error('No file received - choose an .xlsx / .csv file first.');
     const rows = await parseWorkbook(req.file.buffer, req.file.originalname);
     const mode = String(req.body.mode || 'add') === 'update' ? 'update' : 'add';
     if (String(req.body.preview) === '1') {
@@ -387,7 +387,7 @@ api.post('/import/invoice_excel', fileUpload.single('file'), async (req, res) =>
   const c = companyOr(res);
   if (!c) return;
   try {
-    if (!req.file) throw new Error('No file received — choose an .xlsx / .csv file first.');
+    if (!req.file) throw new Error('No file received - choose an .xlsx / .csv file first.');
     const isPreview = String(req.body.preview) === '1';
     if (isPreview) {
       const { parseInvoiceWorkbookBulk } = await import('./invoiceExcel.js');
@@ -474,7 +474,7 @@ api.get('/rates', async (req, res) => {
 api.get('/gst/verify', async (req, res) => {
   try {
     const gstin = String(req.query.gstin || '').trim().toUpperCase();
-    if (!gstin) throw new Error('GSTIN is required — e.g. 27ABCDE1234F1Z5');
+    if (!gstin) throw new Error('GSTIN is required - e.g. 27ABCDE1234F1Z5');
     const result = await verifyGSTIN(gstin);
     ok(res, result);
   } catch (e) { fail(res, e); }
@@ -558,7 +558,7 @@ const TAG_URL = process.env.ONS_UPDATE_VERSION_URL || 'https://raw.githubusercon
 
 // paths that are never replaced by an update
 const UPDATE_SKIP = ['data', 'node_modules', '.git', '_update_stage', 'ONS-Books-PC-Package.zip', 'install-log.txt', 'diag.txt'];
-// roots that may be pruned of files a newer package no longer has — NOTE: dist is NOT pruned because package may exclude it and we rebuild it
+// roots that may be pruned of files a newer package no longer has - NOTE: dist is NOT pruned because package may exclude it and we rebuild it
 const CODE_ROOTS = ['server', 'src', 'public', 'scripts', 'templates'];
 const ROOT_FILES = ['index.html', 'package.json', 'package-lock.json', 'vite.config.js', 'version.js', 'README.md',
   'start-windows.bat', 'START_ME.bat', 'start-mac-linux.sh', 'TEST.bat', 'diagnose.bat'];
@@ -615,7 +615,7 @@ api.post('/update/apply', async (req, res) => {
     const cur = semverOf(BUILD_TAG);
     const ls = semverOf(latest);
     if (!ls) return fail(res, new Error('Could not reach the update server. Check the internet and try again.'));
-    if (!cur || !newerThan(ls, cur)) return fail(res, new Error('Already on the newest build (' + BUILD_TAG + ') — nothing to install.'));
+    if (!cur || !newerThan(ls, cur)) return fail(res, new Error('Already on the newest build (' + BUILD_TAG + ') - nothing to install.'));
 
     // 2. download the package
     const r = await fetch(PKG_URL + '?t=' + Date.now(), {
@@ -635,7 +635,7 @@ api.post('/update/apply', async (req, res) => {
     const have = new Set(files);
     if (!have.has('server/index.js') && !have.has('dist/index.html')) {
       fs.rmSync(stage, { recursive: true, force: true });
-      throw new Error('Package looks wrong — install stopped, nothing was changed.');
+      throw new Error('Package looks wrong - install stopped, nothing was changed.');
     }
 
     // 4. move the new files over the running copy (each rename is quick)
@@ -657,7 +657,7 @@ api.post('/update/apply', async (req, res) => {
           const f = path.join(d, n);
           if (fs.statSync(f).isDirectory()) { walk(f); continue; }
           const rel = path.relative(APP_ROOT, f).split(path.sep).join('/');
-          if (!have.has(rel)) { try { fs.unlinkSync(f); } catch (_) { /* file busy — ignore */ } }
+          if (!have.has(rel)) { try { fs.unlinkSync(f); } catch (_) { /* file busy - ignore */ } }
         }
       };
       walk(dir);
@@ -676,15 +676,8 @@ api.post('/update/apply', async (req, res) => {
       try {
         if (process.platform === 'win32') {
           const bat = path.join(APP_ROOT, '_apply-restart.bat');
-          // Fix for space in path like ADITYA MISHRA — %~dp0. avoids trailing \ escaping quote, this caused Windows cannot find '\C:\Users\ADITYA'
-          fs.writeFileSync(bat,
-            '@echo off\r\ncd /d "%~dp0."
-timeout /t 3 /nobreak >nul\r\nstart "" /b node server\\run.js\r\n');
-          const p = spawn('cmd.exe', ['/c', 'start', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore' });
-          p.unref();
-        } else {
-          const p = spawn('/bin/sh', ['-c', 'sleep 3; npm run build; exec node server/run.js'],
-            { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
+          // Fix for space in path like ADITYA MISHRA - %~dp0. avoids trailing \\ escaping quote, this caused Windows cannot find '\\C:\\Users\\ADITYA'
+                    fs.writeFileSync(bat, "@echo off\r\ncd /d \"%~dp0.\"\r\ntimeout /t 3 /nobreak >nul\r\nstart \"\" /b node server\\run.js\r\n");
           p.unref();
         }
       } catch (_) { /* nothing else we can do */ }
