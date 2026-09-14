@@ -115,7 +115,9 @@ function normalizeKey(k) {
 function parseTabular(aoa, rowsObj) {
   if (!rowsObj.length) return null;
   const firstKeys = Object.keys(rowsObj[0]).map(normalizeKey);
-  const hasTabular = firstKeys.some(k => ['invoice_no','buyer_name','item_name','qty','quantity','rate','item'].includes(k));
+  // v1.11.30: Much more tolerant tabular detection
+  const allowed = ['invoice_no','invoice_number','number','inv_no','buyer_name','party_name','customer_name','buyer','customer','item_name','description','description_of_goods','item','product','particulars','qty','quantity','qnty','rate','price','unit_price','amount','amt','value','hsn','unit','gst','gst_rate','tax_rate'];
+  const hasTabular = firstKeys.some(k => allowed.includes(k) || allowed.some(a=>k.includes(a)||a.includes(k)));
   if (!hasTabular) return null;
 
   const normRows = rowsObj.map(o => {
@@ -181,7 +183,8 @@ function parseTabular(aoa, rowsObj) {
 function parseTabularBulk(aoa, rowsObj) {
   if (!rowsObj.length) return null;
   const firstKeys = Object.keys(rowsObj[0]).map(normalizeKey);
-  const hasTabular = firstKeys.some(k => ['invoice_no','buyer_name','item_name','qty','quantity','rate','item'].includes(k));
+  const allowed = ['invoice_no','invoice_number','number','inv_no','buyer_name','party_name','customer_name','buyer','customer','item_name','description','description_of_goods','item','product','particulars','qty','quantity','qnty','rate','price','unit_price','amount','amt','value','hsn','unit','gst','gst_rate','tax_rate'];
+  const hasTabular = firstKeys.some(k => allowed.includes(k) || allowed.some(a=>k.includes(a)||a.includes(k)));
   if (!hasTabular) return null;
   const normRows = rowsObj.map(o => {
     const m = {};
@@ -242,7 +245,8 @@ function parseTabularBulk(aoa, rowsObj) {
 }
 
 function parseFormatted(aoa) {
-  const invLabel = findLabel(aoa, 'invoice no');
+  // v1.11.30: MUCH MORE TOLERANT — accepts many column name variations and header positions
+  const invLabel = findLabel(aoa, 'invoice no') || findLabel(aoa, 'invoice number') || findLabel(aoa, 'inv no') || findLabel(aoa, 'bill no');
   let invoice_no = '';
   let invoice_date = '';
   if (invLabel) {
@@ -250,7 +254,7 @@ function parseFormatted(aoa) {
     const row = aoa[invLabel.r] || [];
     let datedCol = -1;
     for (let c = invLabel.c + 1; c < row.length; c++) {
-      if (N(row[c]).toLowerCase().includes('dated')) { datedCol = c; break; }
+      if (N(row[c]).toLowerCase().includes('dated') || N(row[c]).toLowerCase().includes('date')) { datedCol = c; break; }
     }
     if (datedCol >= 0) {
       invoice_date = nearbyValue(aoa, invLabel.r, datedCol);
@@ -258,32 +262,32 @@ function parseFormatted(aoa) {
     }
   }
   if (!invoice_date) {
-    const dLabel = findLabel(aoa, 'dated');
+    const dLabel = findLabel(aoa, 'dated') || findLabel(aoa, 'invoice date') || findLabel(aoa, 'date');
     if (dLabel) invoice_date = nearbyValue(aoa, dLabel.r, dLabel.c) || cellAt(aoa, dLabel.r + 1, dLabel.c);
   }
   const date = parseDateAny(invoice_date) || todayISO();
 
-  const refLabel = findLabel(aoa, 'reference by');
+  const refLabel = findLabel(aoa, 'reference by') || findLabel(aoa, 'reference') || findLabel(aoa, 'ref');
   let ref = '';
   if (refLabel) ref = nearbyValue(aoa, refLabel.r, refLabel.c) || cellAt(aoa, refLabel.r + 1, refLabel.c);
 
-  const buyerLabel = findLabel(aoa, 'buyer bill') || findLabel(aoa, 'bill to') || findLabel(aoa, 'buyer');
+  const buyerLabel = findLabel(aoa, 'buyer bill') || findLabel(aoa, 'bill to') || findLabel(aoa, 'buyer') || findLabel(aoa, 'customer') || findLabel(aoa, 'party');
   let buyerName = '', buyerAddrLines = [], buyerGstin = '';
   if (buyerLabel) {
     let r = buyerLabel.r + 1;
     while (r < aoa.length && !cellAt(aoa, r, buyerLabel.c)) r++;
     buyerName = cellAt(aoa, r, buyerLabel.c);
     r++;
-    for (let i = 0; i < 6 && r + i < aoa.length; i++) {
+    for (let i = 0; i < 8 && r + i < aoa.length; i++) {
       const v = cellAt(aoa, r + i, buyerLabel.c);
       if (!v) continue;
       const low = v.toLowerCase();
-      if (low.includes('dispatch') || low.includes('consignee') || low.includes('gst-') || low.includes('gstin') || low.includes('state:-') || extractGSTIN(v)) {
+      if (low.includes('dispatch') || low.includes('consignee') || low.includes('ship to') || low.includes('gst-') || low.includes('gstin') || low.includes('state:-') || extractGSTIN(v)) {
         if (low.includes('gst') || extractGSTIN(v)) {
           buyerGstin = extractGSTIN(v) || buyerGstin;
           break;
         }
-        if (low.includes('dispatch') || low.includes('consignee')) break;
+        if (low.includes('dispatch') || low.includes('consignee') || low.includes('ship')) break;
       }
       buyerAddrLines.push(v);
       const next = cellAt(aoa, r + i + 1, buyerLabel.c);
@@ -293,7 +297,7 @@ function parseFormatted(aoa) {
       }
     }
     if (!buyerGstin) {
-      for (let rr = buyerLabel.r + 1; rr < buyerLabel.r + 8 && rr < aoa.length; rr++) {
+      for (let rr = buyerLabel.r + 1; rr < buyerLabel.r + 10 && rr < aoa.length; rr++) {
         for (let cc = 0; cc < (aoa[rr] || []).length; cc++) {
           const v = cellAt(aoa, rr, cc);
           if (extractGSTIN(v)) { buyerGstin = extractGSTIN(v); break; }
@@ -303,23 +307,23 @@ function parseFormatted(aoa) {
     }
   }
 
-  const shipLabel = findLabel(aoa, 'consignee') || findLabel(aoa, 'ship to');
+  const shipLabel = findLabel(aoa, 'consignee') || findLabel(aoa, 'ship to') || findLabel(aoa, 'delivery');
   let shipName = '', shipAddrLines = [], shipGstin = '';
   if (shipLabel) {
     let r = shipLabel.r + 1;
     while (r < aoa.length && !cellAt(aoa, r, shipLabel.c)) r++;
     shipName = cellAt(aoa, r, shipLabel.c);
     r++;
-    for (let i = 0; i < 6 && r + i < aoa.length; i++) {
+    for (let i = 0; i < 8 && r + i < aoa.length; i++) {
       const v = cellAt(aoa, r + i, shipLabel.c);
       if (!v) continue;
       const low = v.toLowerCase();
-      if (low.includes('buyer') || low.includes('dispatch') || low.includes('gst-') || low.includes('gstin') || extractGSTIN(v)) {
+      if (low.includes('buyer') || low.includes('bill to') || low.includes('dispatch') || low.includes('gst-') || low.includes('gstin') || extractGSTIN(v)) {
         if (low.includes('gst') || extractGSTIN(v)) {
           shipGstin = extractGSTIN(v) || shipGstin;
           break;
         }
-        if (low.includes('buyer')) break;
+        if (low.includes('buyer') || low.includes('bill')) break;
       }
       shipAddrLines.push(v);
       const next = cellAt(aoa, r + i + 1, shipLabel.c);
@@ -330,85 +334,194 @@ function parseFormatted(aoa) {
     }
   }
 
+  // ---- v1.11.30: Flexible header detection — accepts Description, Item, Product, Particulars, Goods, etc ----
+  const DESC_KEYS = ['description', 'description of goods', 'particulars', 'item', 'item name', 'product', 'goods', 'desc', 'name', 'product name', 'material'];
+  const QTY_KEYS = ['quantity', 'qty', 'qnty', 'qty.', 'quantity (kgs)', 'quantity kgs', 'kgs', 'nos', 'qty nos', 'quantity nos', 'qty kgs', 'units', 'unit qty'];
+  const RATE_KEYS = ['rate', 'unit rate', 'price', 'unit price', 'rate per', 'price per', 'unit rate', 'per unit', 'mrp'];
+  const AMT_KEYS = ['amount', 'amt', 'value', 'total amount', 'total', 'taxable value', 'taxable amount', 'line total', 'net amount'];
+  const HSN_KEYS = ['hsn', 'sac', 'hsn/sac', 'hsn code'];
+  const UNIT_KEYS = ['per', 'unit', 'uom', 'uqc'];
+
+  function isHeaderMatch(cell, keys) {
+    const h = N(cell).toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!h) return false;
+    for (const k of keys) {
+      if (h === k || h.includes(k) || k.includes(h)) return true;
+    }
+    return false;
+  }
+
   let headerRow = -1;
   let colMap = {};
-  for (let r = 0; r < aoa.length; r++) {
+  // Scan all rows for header with at least 2 matches (desc+qty or desc+rate or qty+rate)
+  for (let r = 0; r < Math.min(aoa.length, 50); r++) {
     const row = aoa[r] || [];
-    const low = row.map(v => N(v).toLowerCase()).join('|');
-    if ((low.includes('description') && (low.includes('quantity') || low.includes('qty'))) || low.includes('description of goods')) {
+    if (!row.length) continue;
+    let d=0,q=0,ra=0,a=0,hs=0;
+    const tmpMap = {};
+    for (let c = 0; c < row.length; c++) {
+      const cell = N(row[c]);
+      if (!cell) continue;
+      if (isHeaderMatch(cell, DESC_KEYS)) { d++; if (tmpMap.desc===undefined) tmpMap.desc=c; }
+      if (isHeaderMatch(cell, QTY_KEYS)) { q++; if (tmpMap.qty===undefined) tmpMap.qty=c; }
+      if (isHeaderMatch(cell, RATE_KEYS)) { ra++; if (tmpMap.rate===undefined) tmpMap.rate=c; }
+      if (isHeaderMatch(cell, AMT_KEYS)) { a++; if (tmpMap.amt===undefined) tmpMap.amt=c; }
+      if (isHeaderMatch(cell, HSN_KEYS)) { hs++; if (tmpMap.hsn===undefined) tmpMap.hsn=c; }
+      if (isHeaderMatch(cell, UNIT_KEYS)) { if (tmpMap.per===undefined) tmpMap.per=c; }
+      const low = cell.toLowerCase();
+      if (low.includes('no') && (low==='no.'||low.includes('s.no')||low==='no'||low.includes('sr')||low==='s no')) tmpMap.no=c;
+    }
+    const score = d+q+ra+a;
+    if (score >= 2 || (d>=1 && (q>=1||ra>=1||a>=1)) || (q>=1 && ra>=1)) {
       headerRow = r;
-      for (let c = 0; c < row.length; c++) {
-        const h = N(row[c]).toLowerCase();
-        if (h.includes('no') && (h === 'no.' || h.includes('s.no') || h === 'no' || h.includes('sr'))) colMap.no = c;
-        if (h.includes('description')) colMap.desc = c;
-        if (h.includes('hsn') || h.includes('sac')) colMap.hsn = c;
-        if (h.includes('quantity') || h === 'qty' || h.includes('qty')) colMap.qty = c;
-        if (h.includes('rate') && !h.includes('tax')) colMap.rate = c;
-        if (h === 'per' || h.includes('per') || h.includes('unit') || h.includes('uom')) colMap.per = c;
-        if (h.includes('amount')) colMap.amt = c;
-      }
+      colMap = tmpMap;
       break;
     }
   }
+  // Fallback: if still not found, look for row with 3+ hits of any invoice keywords
   if (headerRow < 0) {
-    for (let r = 0; r < aoa.length; r++) {
+    for (let r = 0; r < Math.min(aoa.length, 80); r++) {
       const row = aoa[r] || [];
       let hits = 0;
       for (const cell of row) {
         const h = N(cell).toLowerCase();
-        if (h.includes('description') || h.includes('hsn') || h.includes('quantity') || h.includes('rate') || h.includes('amount')) hits++;
+        if (h.includes('description') || h.includes('item') || h.includes('particular') || h.includes('hsn') || h.includes('quantity') || h.includes('qty') || h.includes('rate') || h.includes('price') || h.includes('amount') || h.includes('value')) hits++;
       }
-      if (hits >= 3) { headerRow = r; break; }
+      if (hits >= 3) { headerRow = r; 
+        // build map from this row
+        for (let c=0;c<row.length;c++) {
+          const h = N(row[c]).toLowerCase();
+          if (h.includes('description')||h.includes('particular')||h.includes('item')||h.includes('product')||h.includes('goods')) { if (colMap.desc===undefined) colMap.desc=c; }
+          if (h.includes('hsn')||h.includes('sac')) { if (colMap.hsn===undefined) colMap.hsn=c; }
+          if (h.includes('quantity')||h==='qty'||h.includes('qty')) { if (colMap.qty===undefined) colMap.qty=c; }
+          if (h.includes('rate')||h.includes('price')) { if (colMap.rate===undefined) colMap.rate=c; }
+          if (h.includes('amount')||h.includes('value')||h.includes('total')) { if (colMap.amt===undefined) colMap.amt=c; }
+          if (h==='per'||h.includes('per')||h.includes('unit')||h.includes('uom')) { if (colMap.per===undefined) colMap.per=c; }
+        }
+        break; 
+      }
     }
   }
 
   const items = [];
   if (headerRow >= 0) {
-    if (colMap.desc === undefined) colMap.desc = 1;
-    if (colMap.qty === undefined) colMap.qty = 3;
-    if (colMap.rate === undefined) colMap.rate = 4;
-    if (colMap.amt === undefined) colMap.amt = 6;
+    // Guess missing columns: if only desc found, try next columns for qty/rate/amt
+    if (colMap.desc !== undefined) {
+      if (colMap.qty === undefined) {
+        // look 1-3 cols right of desc for qty-like numeric
+        for (let c = colMap.desc+1; c <= colMap.desc+3 && c < 20; c++) {
+          if (colMap.qty===undefined) colMap.qty=c;
+        }
+      }
+      if (colMap.rate === undefined) {
+        for (let c = (colMap.qty||colMap.desc)+1; c <= (colMap.qty||colMap.desc)+3 && c < 20; c++) {
+          if (c!==colMap.qty && colMap.rate===undefined) colMap.rate=c;
+        }
+      }
+      if (colMap.amt === undefined) {
+        for (let c = (colMap.rate||colMap.qty||colMap.desc)+1; c < 20; c++) {
+          if (c!==colMap.qty && c!==colMap.rate && colMap.amt===undefined) colMap.amt=c;
+        }
+      }
+    } else {
+      // No desc col found but header row exists — assume col 1 = desc, 3=qty, 4=rate, 6=amt as before
+      if (colMap.desc === undefined) colMap.desc = 1;
+      if (colMap.qty === undefined) colMap.qty = 3;
+      if (colMap.rate === undefined) colMap.rate = 4;
+      if (colMap.amt === undefined) colMap.amt = 6;
+    }
+
     for (let r = headerRow + 1; r < aoa.length; r++) {
       const row = aoa[r] || [];
-      const firstCell = N(row[colMap.desc] || '').trim();
-      const qtyCell = N(row[colMap.qty] || '');
-      const rateCell = N(row[colMap.rate] || '');
-      const amtCell = N(row[colMap.amt] || '');
+      if (!row.some(v=>N(v))) continue; // skip empty
+      const descCell = colMap.desc!==undefined ? N(row[colMap.desc]||'').trim() : '';
+      const qtyCellRaw = colMap.qty!==undefined ? N(row[colMap.qty]||'') : '';
+      const rateCellRaw = colMap.rate!==undefined ? N(row[colMap.rate]||'') : '';
+      const amtCellRaw = colMap.amt!==undefined ? N(row[colMap.amt]||'') : '';
+
       const joined = row.map(N).join(' ').toLowerCase();
-      if (joined.includes('taxable value') || joined.includes('output sgst') || joined.includes('output cgst') || joined.includes('output igst') || joined.includes('round off') || joined.includes('total')) break;
-      if (!firstCell && !qtyCell && !rateCell) {
-        const nextRow = aoa[r + 1] || [];
-        const nextJoined = nextRow.map(N).join(' ').toLowerCase();
-        if (nextJoined.includes('taxable value') || !nextRow.some(v => N(v))) {
-          const next2 = aoa[r + 2] || [];
-          if (!nextRow.some(v => N(v)) && !next2.some(v => N(v))) break;
+      if (joined.includes('taxable value') || joined.includes('output sgst') || joined.includes('output cgst') || joined.includes('output igst') || joined.includes('round off') || (joined.trim()==='total') || joined.includes('grand total') || joined.includes('total amount')) {
+        // Check if this is actually total row — break if amount present but no desc
+        if (!descCell || joined.includes('taxable') || joined.includes('output') || joined.includes('round')) {
+          // If taxable/total row, capture but don't treat as item unless it has qty
+          if (joined.includes('taxable value') || joined.includes('total')) break;
         }
-        if (!firstCell) continue;
       }
-      if (firstCell.toLowerCase().includes('taxable value')) break;
-      let qty = NUM(qtyCell);
+      if (!descCell && !qtyCellRaw && !rateCellRaw) {
+        const nextRow = aoa[r + 1] || [];
+        if (!nextRow.some(v => N(v))) {
+          const next2 = aoa[r + 2] || [];
+          if (!next2.some(v => N(v))) break;
+        }
+        if (!descCell) continue;
+      }
+      // Skip rows that look like headers again or totals
+      const lowDesc = descCell.toLowerCase();
+      if (lowDesc.includes('taxable value') || lowDesc.includes('output sgst') || lowDesc.includes('output cgst') || lowDesc.includes('output igst') || lowDesc==='total' || lowDesc.includes('grand total')) break;
+
+      let qty = NUM(qtyCellRaw);
       let unit = '';
-      if (qty === null) {
-        const m = qtyCell.match(/([\d,.]+)\s*([A-Za-z]+)?/);
+      if (qty === null && qtyCellRaw) {
+        const m = qtyCellRaw.match(/([\d,.]+)\s*([A-Za-z]+)?/);
         if (m) {
           qty = NUM(m[1]);
           unit = (m[2] || '').toUpperCase();
         }
       }
-      if (qty === null || qty <= 0) continue;
-      let rate = NUM(rateCell);
-      let amount = NUM(amtCell);
+      // If qty still null but rate and amount present, try to infer qty=1 or from amount/rate
+      if (qty === null) {
+        const amtTmp = NUM(amtCellRaw);
+        const rateTmp = NUM(rateCellRaw);
+        if (amtTmp !== null && rateTmp !== null && rateTmp>0) {
+          qty = amtTmp / rateTmp;
+        } else if (descCell) {
+          // If description exists but qty missing, assume 1 (user may have only amount)
+          qty = 1;
+        }
+      }
+      if (qty === null || qty <= 0) {
+        // If description exists but qty invalid, still try to keep if amount exists
+        if (!descCell) continue;
+        // Try amount as qty=1 case
+        if (NUM(amtCellRaw)!==null) qty = 1;
+        else continue;
+      }
+
+      let rate = NUM(rateCellRaw);
+      let amount = NUM(amtCellRaw);
       let hsn = colMap.hsn !== undefined ? N(row[colMap.hsn]) : '';
       let per = colMap.per !== undefined ? N(row[colMap.per]) : '';
       if (per) unit = per.toUpperCase() || unit;
       if (!unit) unit = 'KGS';
       if (rate === null) {
         if (amount !== null && qty) rate = amount / qty;
-        else rate = 0;
+        else rate = amount || 0;
       }
       if (amount === null) amount = qty * rate;
       if (hsn) hsn = hsn.replace(/[^0-9]/g, '').slice(0, 10);
-      items.push({ name: firstCell, hsn, qty, unit, rate, amount, gst_rate: null });
+      // Final validation: need at least description and some value
+      if (!descCell) continue;
+      if (rate <=0 && amount <=0) continue;
+      items.push({ name: descCell, hsn, qty, unit, rate, amount, gst_rate: null });
+    }
+  } else {
+    // v1.11.30: NO header found — try to detect items by pattern: any row with at least 3 columns where col 1 is text and col 2-3 are numbers
+    for (let r = 0; r < aoa.length; r++) {
+      const row = aoa[r] || [];
+      if (row.length < 2) continue;
+      const c0 = N(row[0]), c1 = N(row[1]), c2 = N(row[2]||''), c3 = N(row[3]||'');
+      const n1 = NUM(c1), n2 = NUM(c2), n3 = NUM(c3);
+      // Pattern: Description | Qty | Rate | Amount  OR  Sr | Description | Qty | Rate
+      if (c0 && (n1!==null || n2!==null)) {
+        let desc = c1 && n1===null ? c1 : c0;
+        let qty = n1!==null ? n1 : (n2!==null ? n2 : 1);
+        let rate = n2!==null ? n2 : (n3!==null ? n3 : (n1!==null ? n1 : 0));
+        let amount = n3!==null ? n3 : qty*rate;
+        if (desc && qty>0 && (rate>0||amount>0)) {
+          if (desc.toLowerCase().includes('description')||desc.toLowerCase().includes('item')||desc.toLowerCase().includes('particular')) continue;
+          items.push({ name: desc, hsn: '', qty, unit: 'KGS', rate: rate||amount, amount: amount||qty*rate, gst_rate: null });
+        }
+      }
     }
   }
 
@@ -515,6 +628,7 @@ function parseFormatted(aoa) {
     total,
     regime,
     _source: 'formatted',
+    _debug: { headerRow, colMap, aoaRows: aoa.length }
   };
 }
 
@@ -725,7 +839,11 @@ export async function exportInvoiceTemplate(c) {
 }
 
 async function importOneInvoice(c, parsed, filename) {
-  if (!parsed.items || !parsed.items.length) throw vErr('No items found in Excel — check that the sheet has Description, Quantity, Rate, Amount columns and at least one item row.');
+  if (!parsed.items || !parsed.items.length) {
+    const dbg = parsed._debug ? ` (headerRow=${parsed._debug.headerRow}, colMap=${JSON.stringify(parsed._debug.colMap)}, rows=${parsed._debug.aoaRows})` : '';
+    const sheetInfo = parsed._sheet ? ` Sheet: ${parsed._sheet}.` : '';
+    throw vErr(`No items found in Excel${sheetInfo} — check that the sheet has Description/Item, Quantity/Qty, Rate/Price, Amount columns and at least one item row. Detected: ${dbg}. Tip: Use template from /api/export/invoice_excel_template — it has correct headers. For multi-sheet: one bill per sheet. For single sheet: one row per item with same invoice_no.`);
+  }
   if (!parsed.date) parsed.date = todayISO();
   const de = dateInBook(c, parsed.date);
   if (de) throw vErr(`Invoice ${parsed.invoice_no}: ${de}`);
@@ -770,8 +888,14 @@ async function importOneInvoice(c, parsed, filename) {
 
 export async function importInvoiceExcel(c, buf, filename = '') {
   // v1.11.23: Use bulk parser — supports multi-sheet workbook where each sheet = one bill
+  // v1.11.30: More tolerant + better error
   const list = await parseInvoiceWorkbookBulk(buf, filename);
-  if (!list.length || !list[0].items || !list[0].items.length) throw vErr('No items found in Excel — check that each sheet has Description, Quantity, Rate, Amount columns and at least one item row. For multi-sheet: one bill per sheet. For single sheet: one row per item with same invoice_no.');
+  if (!list.length) throw vErr('No bills found in Excel — file appears empty or all sheets are named Info/Mapping/Template/Sample (skipped). Rename your bill sheets to invoice numbers like PI-200, INV-001 etc. Each sheet = one bill. Or use single sheet with invoice_no, buyer_name, item_name, qty, rate columns.');
+  if (!list[0].items || !list[0].items.length) {
+    const first = list[0];
+    const dbg = first._debug ? ` headerRow=${first._debug.headerRow} colMap=${JSON.stringify(first._debug.colMap)} rows=${first._debug.aoaRows}` : '';
+    throw vErr(`No items found in first sheet (${first._sheet||first.invoice_no||'Sheet1'}) — check columns. Need Description/Item/Product, Quantity/Qty, Rate/Price, Amount. Found debug:${dbg}. Download template from Export Template button — it has correct headers: invoice_no, date DD/MM/YYYY, buyer_name, item_name, qty, rate, gst_rate, etc.`);
+  }
 
   const results = [];
   const errors = [];
