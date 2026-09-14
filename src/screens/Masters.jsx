@@ -272,7 +272,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
                       <button className="btn sm" onClick={fetchCaptcha} disabled={captcha.loading}>{captcha.loading ? 'Loading captcha...' : '🔐 Get Captcha & Fetch Live'}</button>
                       {captcha.img && (
                         <>
-                          <img src={captcha.img} alt="GST captcha" style={{ height: 38, border: '1px solid #ccc', borderRadius: 4, background: '#fff' }} />
+                          <img src={captcha.img} alt="GST captcha" style={{ height: 38, border: '1px solid #ccc', borderRadius: 4, background: '#000' }} />
                           <input value={captcha.value} onChange={(e) => setCaptcha(c => ({ ...c, value: e.target.value }))} placeholder="Enter 6 chars" style={{ width: 110, textTransform: 'uppercase' }} maxLength={6} />
                           <button className="btn sm" onClick={verifyWithCaptcha} disabled={gstState.loading}>{gstState.loading ? 'Fetching...' : '✓ Fetch Live Details'}</button>
                           <button className="btn ghost sm" onClick={fetchCaptcha}>↻ Refresh</button>
@@ -287,10 +287,10 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
           )}
           {/* Show captcha even if no gstState yet but user clicked */}
           {!gstState.data && captcha.img && (
-            <div style={{ border: '1px dashed var(--gold-line-soft)', borderRadius: 8, padding: 10, marginBottom: 10, background: '#fffbe6' }}>
+            <div style={{ border: '1px dashed var(--gold-line-soft)', borderRadius: 8, padding: 10, marginBottom: 10, background: 'linear-gradient(180deg, #1a170b, #000000)' }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12 }}>GST Portal Captcha:</span>
-                <img src={captcha.img} alt="GST captcha" style={{ height: 38, border: '1px solid #ccc', borderRadius: 4, background: '#fff' }} />
+                <img src={captcha.img} alt="GST captcha" style={{ height: 38, border: '1px solid #ccc', borderRadius: 4, background: '#000' }} />
                 <input value={captcha.value} onChange={(e) => setCaptcha(c => ({ ...c, value: e.target.value }))} placeholder="Enter 6 chars" style={{ width: 110, textTransform: 'uppercase' }} maxLength={6} />
                 <button className="btn sm" onClick={verifyWithCaptcha} disabled={gstState.loading}>{gstState.loading ? 'Fetching...' : '✓ Fetch Live'}</button>
                 <button className="btn ghost sm" onClick={fetchCaptcha}>↻ Refresh</button>

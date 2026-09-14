@@ -284,3 +284,43 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   .portal { position: absolute; inset: 0; display: block; padding: 0; background: #000; }
   .portal .box { max-width: none !important; border: none; }
 }
+
+/* v1.11.33 BLACK GOLD ENFORCED — ANYTHING NEXT UPDATE ONLY BLACK BG GOLD LETTERING */
+.card, .portal .box, table.grid, table.grid th, table.grid td {
+  background: linear-gradient(180deg, var(--bg2), var(--bg1)) !important;
+  color: var(--ink) !important;
+  border-color: var(--gold-line) !important;
+}
+table.grid th {
+  color: var(--gold) !important;
+  background: #000 !important;
+}
+table.grid td {
+  color: var(--ink) !important;
+}
+.btn {
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold) 55%, #b8942a) !important;
+  color: #000 !important;
+  border-color: var(--gold) !important;
+}
+.btn.ghost {
+  background: transparent !important;
+  color: var(--gold) !important;
+  border-color: var(--gold-line) !important;
+}
+.errbox {
+  background: rgba(224,138,75,0.08) !important;
+  border-color: rgba(224,138,75,0.5) !important;
+  color: #eeb27c !important;
+}
+input, select, textarea {
+  background: #0a0905 !important;
+  color: var(--ink) !important;
+  border-color: var(--gold-line) !important;
+}
+/* preview specific black gold */
+.preview-bulk, .preview-parsed, .preview-result {
+  background: linear-gradient(180deg, #1a170b, #000000) !important;
+  border: 1px solid var(--gold) !important;
+  color: var(--ink) !important;
+}

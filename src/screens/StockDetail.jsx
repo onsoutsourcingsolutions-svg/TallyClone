@@ -170,7 +170,7 @@ export function StockDetailModal({ itemId, itemName, onClose, onVoucher }) {
 export function StockQuickTip({ item, onOpenDetail }) {
   if (!item) return null;
   return (
-    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, minWidth: 280, background: '#111', color: '#eee', border: '1px solid var(--gold)', borderRadius: 8, padding: '10px 12px', fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, minWidth: 280, background: '#000000', color: 'var(--ink)', border: '1px solid var(--gold)', borderRadius: 8, padding: '10px 12px', fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
       <div style={{ fontWeight: 800, color: 'var(--gold-hi)', marginBottom: 4 }}>📦 {item.name}</div>
       <div>Stock in hand: <b>{qty(item.stock_qty)} {item.unit}</b> · {inr(item.stock_value)}</div>
       <div className="faint" style={{ color: '#aaa', marginTop: 4 }}>HSN {item.hsn || '—'} · GST {item.gst_rate ?? 0}% · {item.unit}</div>

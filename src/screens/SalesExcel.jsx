@@ -192,7 +192,7 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
                           {it && <button className="btn ghost sm" style={{ fontSize: 10, padding: '2px 4px' }} onClick={() => setDetailItem(it)} title="Click to see when bought/sold & against what">📜</button>}
                         </div>
                         {hoverItem && hoverPos.row === i && hoverItem.id === it?.id && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 60, minWidth: 300, background: '#111', color: '#eee', border: '1px solid var(--gold)', borderRadius: 8, padding: '10px 12px', fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
+                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 60, minWidth: 300, background: '#000000', color: 'var(--ink)', border: '1px solid var(--gold)', borderRadius: 8, padding: '10px 12px', fontSize: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
                             <div style={{ fontWeight: 800, color: 'var(--gold-hi)' }}>📦 {it.name}</div>
                             <div>In hand: <b style={{ color: lowStock ? '#e0a06b' : '#8ec07c' }}>{qty(it.stock_qty)} {it.unit}</b> · {inr(it.stock_value)} {lowStock && <span style={{ color: '#e0a06b' }}>⚠ low vs {q}</span>}</div>
                             <div className="faint" style={{ color: '#aaa' }}>HSN {it.hsn || '—'} · GST {it.gst_rate ?? 0}%</div>
