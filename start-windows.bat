@@ -69,10 +69,15 @@ if errorlevel 1 (
   call npm install --no-audit --no-fund >> install-log.txt 2>&1
 )
 if errorlevel 1 (
-  echo   Second attempt failed, trying npm cache clean + install...
+  echo   Second attempt failed, trying with legacy-peer-deps for Node v24...
+  echo   --- retry legacy-peer-deps --- >> install-log.txt
+  call npm install --no-audit --no-fund --legacy-peer-deps >> install-log.txt 2>&1
+)
+if errorlevel 1 (
+  echo   Third attempt failed, trying npm cache clean + install...
   echo   --- retry after cache verify --- >> install-log.txt
   call npm cache verify >> install-log.txt 2>&1
-  call npm install --no-audit --no-fund >> install-log.txt 2>&1
+  call npm install --no-audit --no-fund --legacy-peer-deps >> install-log.txt 2>&1
 )
 if errorlevel 1 (
   if exist "node_modules\express\package.json" (
