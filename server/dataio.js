@@ -155,7 +155,7 @@ export async function exportKindTemplate(kind, c) {
   const X = await xlsxLib();
   const info = {
     ledgers: ['Fill one ledger per row. Required: name, group.', 'opening_type is Dr or Cr.', ...(kind === 'ledgers' ? GROUP_NAMES.map((g) => 'Group available: ' + g) : [])],
-    items: ['SINGLE FORMAT: one row per item — master + opening stock + date in SAME file. Required: name.', 'If you fill qty+rate in same row, stock is auto-added with that date for buy vs sell age tracking.', 'Optional: qty, rate, date (DD/MM/YYYY), narration (batch/supplier). Example row is marked EXAMPLE — delete it before importing.'],
+    items: ['SINGLE FORMAT: one row per item — master + opening stock + date in SAME file. Required: name.', 'If you fill qty+rate in same row, stock is auto-added with that date (DD/MM/YYYY — e.g. 15/08/2026) for buy vs sell age tracking.', 'Optional: qty, rate, date (DD/MM/YYYY), narration (batch/supplier). Template has 1 EXAMPLE row — delete it or rename to real item before importing, otherwise it will be skipped.'],
     stock: ['Fill one item per row. Required: item_name (must exist), qty, rate.', 'Optional: date = date of buying DD/MM/YYYY for tracking buy vs sell age — e.g. 15/08/2026. If blank, uses the date you choose in the import screen.', 'Optional: narration = batch / supplier ref.'],
     vouchers: ['Fill one voucher per row. class: Receipt / Payment / Contra / Journal. Each row must balance.'],
   }[kind];
@@ -176,10 +176,10 @@ export async function exportKindSample(kind, c) {
   if (kind !== 'items') throw vErr('A sample file is available for Stock Items only.');
   const companyName = String(c ? c.name : 'ONS').replace(/[\\/:*?"<>|]+/g, '-').trim();
   const rows = [
-    { name: 'EXAMPLE-1  Steel Rod 12mm — rename to your real item name', unit: 'qty', hsn: '7214', gst_rate: 18, is_service: 0, sale_account: 'Sales', purchase_account: 'Purchases', qty: 100, rate: 80.5, date: '10/08/2026', narration: 'Batch A / Supplier XYZ' },
-    { name: 'EXAMPLE-2  Cement 43 grade 50kg — rename to your real item name', unit: 'bag', hsn: '2523', gst_rate: 28, is_service: 0, sale_account: '', purchase_account: '', qty: 50, rate: 350, date: '15/08/2026', narration: 'Godown 1' },
-    { name: 'EXAMPLE-3  Door fabrication (service) — rename to your real service name', unit: '', hsn: '9987', gst_rate: 18, is_service: 1, sale_account: '', purchase_account: '', qty: '', rate: '', date: '', narration: '' },
-    { name: 'EXAMPLE-4  already-existing item — rename to an existing item name to UPDATE it', unit: 'nos', hsn: '', gst_rate: 12, is_service: 0, sale_account: '', purchase_account: '', qty: 20, rate: 120, date: '20/08/2026', narration: 'Opening from old books' },
+    { name: 'Steel Rod 12mm', unit: 'qty', hsn: '7214', gst_rate: 18, is_service: 0, sale_account: 'Sales', purchase_account: 'Purchases', qty: 100, rate: 80.5, date: '10/08/2026', narration: 'Batch A / Supplier XYZ' },
+    { name: 'Cement 43 grade 50kg', unit: 'bag', hsn: '2523', gst_rate: 28, is_service: 0, sale_account: '', purchase_account: '', qty: 50, rate: 350, date: '15/08/2026', narration: 'Godown 1' },
+    { name: 'Door fabrication (service)', unit: 'nos', hsn: '9987', gst_rate: 18, is_service: 1, sale_account: '', purchase_account: '', qty: '', rate: '', date: '', narration: '' },
+    { name: 'Angle 50x50x6mm', unit: 'nos', hsn: '7216', gst_rate: 12, is_service: 0, sale_account: '', purchase_account: '', qty: 20, rate: 120, date: '20/08/2026', narration: 'Opening from old books' },
   ];
   const mapping = [
     'SAMPLE FILE — SINGLE FORMAT: how to fill the Stock Items upload (master + stock + date in ONE file)',
@@ -188,7 +188,7 @@ export async function exportKindSample(kind, c) {
     '  ADD    -> names that do not exist yet are CREATED. Names that already exist are SKIPPED.',
     '  UPDATE -> a name that already exists is UPDATED with this row (unit, HSN, GST rate, service flag, default ledgers). New names are still CREATED.',
     '',
-    'Rows whose name starts with EXAMPLE- are NEVER imported — rename them to your real item names.',
+    'Sample file now contains 4 REAL items that WILL be imported — Steel Rod, Cement, etc. You can keep, edit, or delete them. Template file has EXAMPLE row that must be deleted.',
     '',
     'COLUMN MAPPING (keep the header row exactly as row 1):',
     '  name            -> item name as shown in the app. REQUIRED. This name is the key for add/update.',
@@ -531,5 +531,9 @@ export function importKind(kind, c, rows, { mode = 'add', date, counterpart_id }
       });
     }
   } else throw vErr('Unknown import kind.');
+  // Better error when all rows skipped (common when uploading sample with EXAMPLE-)
+  if (created.length === 0 && updated.length === 0 && skipped.length > 0 && errors.length === 0) {
+    throw vErr(`Nothing was imported — every row was skipped (${skipped.length} rows). Rows whose name starts with "EXAMPLE-" are placeholders: rename them to your real item names (e.g. "Steel Rod 12mm") or delete them, then upload again. If you uploaded the SAMPLE file, it now contains real items (v1.11.22) — try downloading fresh sample. If you uploaded TEMPLATE, add your data below header. Skipped: ${skipped.slice(0,10).join(', ')}`);
+  }
   return { created: created.length, updated: updated.length, skipped: skipped.length, errors, samples: created.slice(0, 5), updatedSamples: updated.slice(0, 5) };
 }
