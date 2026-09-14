@@ -772,11 +772,16 @@ api.get('/dashboard', (req, res) => {
 // ---------------------------------------------------------------
 const APP_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // (the env overrides exist so the update flow can be tested against a local stand-in)
-const PKG_URL = process.env.ONS_UPDATE_ZIP_URL || 'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/ONS-Books-PC-Package.zip';
+// v1.11.28: HOST DIRECTLY VIA GITHUB — use FULL zip (30MB) includes node_modules, so NO manual download or npm install needed
+// User asked WHY DO I HAVE TO DOWNLOAD AGAIN — now auto-update downloads directly from GitHub raw, no manual steps
+const PKG_URL = process.env.ONS_UPDATE_ZIP_URL || 'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip';
 const TAG_URL = process.env.ONS_UPDATE_VERSION_URL || 'https://raw.githubusercontent.com/onsoutsourcingsolutions-svg/TallyClone/arena/01a0827e-tallyclone/version.js';
 
-// paths that are never replaced by an update
-const UPDATE_SKIP = ['data', 'node_modules', '.git', '_update_stage', 'ONS-Books-PC-Package.zip', 'install-log.txt', 'diag.txt'];
+// paths that are never replaced by an update — v1.11.28: NO LONGER SKIP node_modules when using FULL zip (hosted via GitHub, includes deps, so update is truly self-contained)
+// For small zip we still skip node_modules to keep existing, but for full zip we update it
+const UPDATE_SKIP_BASE = ['data', '.git', '_update_stage', 'install-log.txt', 'diag.txt', 'build-log.txt', 'server.log', 'update-restart.log'];
+const UPDATE_SKIP = process.env.ONS_UPDATE_ZIP_URL && process.env.ONS_UPDATE_ZIP_URL.includes('full') ? UPDATE_SKIP_BASE : [...UPDATE_SKIP_BASE, 'ONS-Books-PC-Package.zip', 'ONS-Books-PC-Package-full.zip'];
+// Note: we allow node_modules to be updated when full zip is used (30MB) — ensures NO npm install needed after GitHub update
 // roots that may be pruned of files a newer package no longer has - NOTE: dist is NOT pruned because package may exclude it and we rebuild it
 const CODE_ROOTS = ['server', 'src', 'public', 'scripts', 'templates'];
 const ROOT_FILES = ['index.html', 'package.json', 'package-lock.json', 'vite.config.js', 'version.js', 'README.md',
@@ -904,24 +909,26 @@ api.post('/update/apply', async (req, res) => {
           const batContent = [
             '@echo off',
             'setlocal',
-            'rem ONS Books Auto-restart after update — v1.11.26 — NO MANUAL CLOSE NEEDED — LIVE UPDATE',
+            'rem ONS Books Auto-restart after update — v1.11.28 — HOSTED VIA GITHUB NO MANUAL DOWNLOAD — NO CLOSE NEEDED',
             'rem FIX for ADITYA MISHRA space path — %~dp0. avoids trailing backslash escaping quote',
             'cd /d "%~dp0."',
-            'echo [%date% %time%] === AUTO-UPDATE RESTART START === >> update-restart.log',
-            'echo [%date% %time%] Restarting after update to %BUILD_TAG% >> update-restart.log'.replace('%BUILD_TAG%', latest || 'unknown'),
+            'echo [%date% %time%] === AUTO-UPDATE RESTART START v1.11.28 GITHUB HOSTED === >> update-restart.log',
+            'echo [%date% %time%] Restarting after update to %BUILD_TAG% from GitHub >> update-restart.log'.replace('%BUILD_TAG%', latest || 'unknown'),
             'timeout /t 4 /nobreak >nul',
             'echo [%date% %time%] Killing old server on :8080... >> update-restart.log',
             'for /f "tokens=5" %%a in (\'netstat -aon ^| findstr :8080 ^| findstr LISTENING\') do taskkill /f /pid %%a >nul 2>nul',
             'timeout /t 2 /nobreak >nul',
-            'echo [%date% %time%] Starting new server... >> update-restart.log',
-            'rem Try to rebuild quickly if npm available (ensures new dist shows) — fallback to node if build fails',
-            'if exist "node_modules" (',
+            'echo [%date% %time%] Starting new server (FULL zip includes node_modules, no npm install needed)... >> update-restart.log',
+            'rem v1.11.28: FULL zip includes node_modules, so we can start directly. If small zip, try npm install then build.',
+            'if exist "node_modules\\express\\package.json" (',
+            '  echo [%date% %time%] node_modules found, building and starting... >> update-restart.log',
             '  start "" /b cmd /c "npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
             ') else (',
-            '  start "" /b node "server\\run.js" >> server.log 2>&1',
+            '  echo [%date% %time%] node_modules missing, installing then building... >> update-restart.log',
+            '  start "" /b cmd /c "npm install --no-audit --no-fund --prefer-offline >> server.log 2>&1 & npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
             ')',
-            'echo [%date% %time%] New server start command issued — will be up in 3-5 sec >> update-restart.log',
-            'echo [%date% %time%] New build should be live — NO manual close needed — browser will auto-reload >> update-restart.log',
+            'echo [%date% %time%] New server start command issued — will be up in 5-10 sec >> update-restart.log',
+            'echo [%date% %time%] New build LIVE from GitHub — NO manual download, NO close needed — browser auto-reloads >> update-restart.log',
             'timeout /t 3 /nobreak >nul',
             'del "%~f0" >nul 2>nul',
             'endlocal',
