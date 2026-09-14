@@ -328,7 +328,7 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
         <button className="btn ghost sm" onClick={() => setRows([...rows, { name: '', qty: '1', rate: '' }])}>+ Add item</button>
       </div>
       {detailItem && <StockDetailLazy itemId={detailItem.id} itemName={detailItem.name} onClose={() => setDetailItem(null)} onVoucher={(vid) => { setDetailItem(null); setViewVoucherId(vid); }} />}
-      {viewVoucherId && <VoucherModalLazy voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />}
+      {viewVoucherId && <VoucherModalDirect voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />}
       <div className="vfooter">
         <label className="f" style={{ minWidth: 240, margin: 0 }}><span>Narration</span><input value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
         <span className="tot">
@@ -349,11 +349,9 @@ function StockDetailLazy(props) {
   if (!Comp) return <div className="portal"><div className="box">Loading history…</div></div>;
   return <Comp {...props} />;
 }
-function VoucherModalLazy({ voucherId, onClose }) {
-  const [Comp, setComp] = useState(null);
-  useEffect(() => { import('./Voucher.jsx').then(m => setComp(() => m.VoucherModal)); }, []);
-  if (!Comp) return <div className="portal"><div className="box">Loading voucher…</div></div>;
-  return <Comp voucherId={voucherId} onClose={onClose} />;
+function VoucherModalDirect({ voucherId, onClose }) {
+  // Use VoucherModal directly — same file, no circular import
+  return <VoucherModal voucherId={voucherId} onClose={onClose} />;
 }
 
 function hintBody(cls) {

@@ -2,11 +2,16 @@ import { useState, useMemo, useEffect } from 'react';
 import { api, useApp } from '../state.jsx';
 import { inr, todayISO, ddMMyyyy, qty } from '../fmt.js';
 import { StockDetailModal } from './StockDetail.jsx';
-import { VoucherModal } from './Voucher.jsx';
 
 // Sales Excel — spreadsheet-like entry + Excel upload in Sales column
 // v1.11.24: Multi-sheet Excel bills auto-import + stock dynamic matching + hover/click detail
 
+function VoucherModalLazy({ voucherId, onClose, onDeleted }) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./Voucher.jsx').then(m => setComp(() => m.VoucherModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading voucher…</div></div>;
+  return <Comp voucherId={voucherId} onClose={onClose} onDeleted={onDeleted} />;
+}
 function rs2p(s) { return Math.round((Number(s) || 0) * 100); }
 
 export function SalesExcelPanel({ accounts, items, onSaved }) {
@@ -319,7 +324,7 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
         <StockDetailModal itemId={detailItem.id} itemName={detailItem.name} onClose={() => setDetailItem(null)} onVoucher={(vid) => { setDetailItem(null); setViewVoucherId(vid); }} />
       )}
       {viewVoucherId && (
-        <VoucherModal voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} onDeleted={() => { setViewVoucherId(null); onSaved && onSaved({}); }} />
+        <VoucherModalLazy voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} onDeleted={() => { setViewVoucherId(null); onSaved && onSaved({}); }} />
       )}
     </div>
   );

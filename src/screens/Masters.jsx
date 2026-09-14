@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, useApp } from '../state.jsx';
 import { ItemExcelPanel } from './ItemExcel.jsx';
 import { inr } from '../fmt.js';
-import { StockDetailModal as StockDetailDirect } from './StockDetail.jsx';
-import { VoucherModal as VoucherModalDirect } from './Voucher.jsx';
 
 /* ---------- shared bits ---------- */
 function Err({ e }) { return e ? <div className="errbox">{e}</div> : null; }
