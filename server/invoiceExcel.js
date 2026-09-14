@@ -602,7 +602,7 @@ export async function exportInvoiceTemplate(c) {
   const rows = [
     {
       invoice_no: 'ONS/PI-200',
-      date: todayISO(),
+      date: (()=>{const d=new Date();return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;})(),
       ref: 'Virag Vohra',
       buyer_name: 'REFTECH IMPEX',
       buyer_address: 'F/620, Sundaram II SV Road Ram Baug Lane\nBehind Vijay Sales Sai Baba Nagar\nBorivali West Mumbai- 400092',
@@ -626,7 +626,7 @@ export async function exportInvoiceTemplate(c) {
   const info = [
     'SALES INVOICE IMPORT — keeps your Excel format, books + prints as PI-200-REFTECH.pdf',
     'One row = one item. If an invoice has 2 items, use 2 rows with same invoice_no.',
-    'Required: invoice_no, date (YYYY-MM-DD or DD-MM-YYYY), buyer_name, item_name, qty, rate',
+    'Required: invoice_no, date (DD/MM/YYYY — e.g. 15/09/2026), buyer_name, item_name, qty, rate',
     'Optional: buyer_address, buyer_gstin, ship_*, hsn, unit (KGS/NOS), gst_rate (e.g. 18)',
     'If buyer_name does not exist, it will be created as Sundry Debtor. If item_name does not exist, it will be created.',
     'GST: if gst_rate is 18, system posts SGST 9% + CGST 9% for intra-state, or IGST 18% for inter-state.',
@@ -637,7 +637,7 @@ export async function exportInvoiceTemplate(c) {
   is['!cols'] = [{ wch: 120 }];
   X.utils.book_append_sheet(wb, is, 'Info');
   const buf = X.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  return { buf, file: `sales-invoice-template-${todayISO()}.xlsx` };
+  return { buf, file: `sales-invoice-template-${(() => { const d=new Date(); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; })()}.xlsx` };
 }
 
 async function importOneInvoice(c, parsed, filename) {

@@ -56,7 +56,7 @@ const ITEM_COLS = [
   ['purchase_account', 'Purchase ledger (blank = default)'],
   ['qty', 'Opening stock qty you bought (optional — if filled, stock will be added with date)'],
   ['rate', 'Rate per unit ₹ for opening stock (required if qty filled)'],
-  ['date', 'Date of buying YYYY-MM-DD for tracking buy vs sell age (optional, default = books begin)'],
+  ['date', 'Date of buying DD/MM/YYYY for tracking buy vs sell age (optional, default = books begin) — e.g. 15/08/2026'],
   ['narration', 'Batch / Supplier ref for this purchase (optional)'],
 ];
 const LEDGER_COLS = [
@@ -70,11 +70,11 @@ const STOCK_COLS = [
   ['item_name', 'Item name (REQUIRED, must already exist)'],
   ['qty', 'Quantity (REQUIRED)'],
   ['rate', 'Rate per unit ₹ (REQUIRED)'],
-  ['date', 'Date of buying YYYY-MM-DD (when you bought this stock) — for tracking buy vs sell age, e.g. 2026-08-15'],
+  ['date', 'Date of buying DD/MM/YYYY (when you bought this stock) — for tracking buy vs sell age, e.g. 15/08/2026'],
   ['narration', 'Narration / Batch / Supplier ref (optional)'],
 ];
 const VOUCHER_COLS = [
-  ['class', 'Type: Receipt / Payment / Contra / Journal'], ['date', 'Date YYYY-MM-DD (REQUIRED)'],
+  ['class', 'Type: Receipt / Payment / Contra / Journal'], ['date', 'Date DD/MM/YYYY (REQUIRED) — e.g. 15/04/2026'],
   ['number', 'Your voucher number (optional)'], ['narration', 'Narration'],
   ['dr_account', 'Debit ledger name (REQUIRED)'], ['dr_amount', 'Debit amount ₹ (REQUIRED)'],
   ['cr_account', 'Credit ledger name (REQUIRED)'], ['cr_amount', 'Credit amount ₹ (REQUIRED)'],
@@ -145,7 +145,7 @@ export async function exportKindData(kind, c) {
         };
       });
     const info = ['VOUCHERS — simple Receipt / Payment / Contra / Journal lines.', 'class can be: Receipt, Payment, Contra, Journal.',
-      'Each row must balance: dr_amount = cr_amount.', 'Dates must be inside the books period (YYYY-MM-DD).'];
+      'Each row must balance: dr_amount = cr_amount.', 'Dates must be inside the books period (DD/MM/YYYY — e.g. 15/04/2026).'];
     return { buf: sheetOut(X, rows, 'Vouchers', info), file: `${companyName}-vouchers-${stamp}.xlsx` };
   }
   throw vErr('Unknown export kind.');
@@ -155,16 +155,16 @@ export async function exportKindTemplate(kind, c) {
   const X = await xlsxLib();
   const info = {
     ledgers: ['Fill one ledger per row. Required: name, group.', 'opening_type is Dr or Cr.', ...(kind === 'ledgers' ? GROUP_NAMES.map((g) => 'Group available: ' + g) : [])],
-    items: ['SINGLE FORMAT: one row per item — master + opening stock + date in SAME file. Required: name.', 'If you fill qty+rate in same row, stock is auto-added with that date for buy vs sell age tracking.', 'Optional: qty, rate, date (YYYY-MM-DD), narration (batch/supplier). Example row is marked EXAMPLE — delete it before importing.'],
-    stock: ['Fill one item per row. Required: item_name (must exist), qty, rate.', 'Optional: date = date of buying YYYY-MM-DD for tracking buy vs sell age. If blank, uses the date you choose in the import screen.', 'Optional: narration = batch / supplier ref.'],
+    items: ['SINGLE FORMAT: one row per item — master + opening stock + date in SAME file. Required: name.', 'If you fill qty+rate in same row, stock is auto-added with that date for buy vs sell age tracking.', 'Optional: qty, rate, date (DD/MM/YYYY), narration (batch/supplier). Example row is marked EXAMPLE — delete it before importing.'],
+    stock: ['Fill one item per row. Required: item_name (must exist), qty, rate.', 'Optional: date = date of buying DD/MM/YYYY for tracking buy vs sell age — e.g. 15/08/2026. If blank, uses the date you choose in the import screen.', 'Optional: narration = batch / supplier ref.'],
     vouchers: ['Fill one voucher per row. class: Receipt / Payment / Contra / Journal. Each row must balance.'],
   }[kind];
   const cols = { ledgers: LEDGER_COLS, items: ITEM_COLS, stock: STOCK_COLS, vouchers: VOUCHER_COLS }[kind];
   const example = {
     ledgers: { name: 'EXAMPLE — delete this row', group: GROUP_NAMES[0] || '', opening_balance: '', opening_type: 'Dr' },
     items: { name: 'EXAMPLE — delete this row', unit: 'nos', hsn: '', gst_rate: 18, is_service: 0 },
-    stock: { item_name: 'EXAMPLE — delete this row', qty: 100, rate: 80.5, date: todayISO(), narration: 'Batch A / Supplier XYZ' },
-    vouchers: { class: 'Receipt', date: '2026-04-01', number: '', narration: '', dr_account: 'EXAMPLE — delete', dr_amount: '', cr_account: '', cr_amount: '' },
+    stock: { item_name: 'EXAMPLE — delete this row', qty: 100, rate: 80.5, date: (()=>{const d=new Date();return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;})(), narration: 'Batch A / Supplier XYZ' },
+    vouchers: { class: 'Receipt', date: '01/04/2026', number: '', narration: '', dr_account: 'EXAMPLE — delete', dr_amount: '', cr_account: '', cr_amount: '' },
   }[kind];
   const row = {};
   for (const [k] of cols) row[k] = example[k] ?? '';
@@ -176,10 +176,10 @@ export async function exportKindSample(kind, c) {
   if (kind !== 'items') throw vErr('A sample file is available for Stock Items only.');
   const companyName = String(c ? c.name : 'ONS').replace(/[\\/:*?"<>|]+/g, '-').trim();
   const rows = [
-    { name: 'EXAMPLE-1  Steel Rod 12mm — rename to your real item name', unit: 'qty', hsn: '7214', gst_rate: 18, is_service: 0, sale_account: 'Sales', purchase_account: 'Purchases', qty: 100, rate: 80.5, date: '2026-08-10', narration: 'Batch A / Supplier XYZ' },
-    { name: 'EXAMPLE-2  Cement 43 grade 50kg — rename to your real item name', unit: 'bag', hsn: '2523', gst_rate: 28, is_service: 0, sale_account: '', purchase_account: '', qty: 50, rate: 350, date: '2026-08-15', narration: 'Godown 1' },
+    { name: 'EXAMPLE-1  Steel Rod 12mm — rename to your real item name', unit: 'qty', hsn: '7214', gst_rate: 18, is_service: 0, sale_account: 'Sales', purchase_account: 'Purchases', qty: 100, rate: 80.5, date: '10/08/2026', narration: 'Batch A / Supplier XYZ' },
+    { name: 'EXAMPLE-2  Cement 43 grade 50kg — rename to your real item name', unit: 'bag', hsn: '2523', gst_rate: 28, is_service: 0, sale_account: '', purchase_account: '', qty: 50, rate: 350, date: '15/08/2026', narration: 'Godown 1' },
     { name: 'EXAMPLE-3  Door fabrication (service) — rename to your real service name', unit: '', hsn: '9987', gst_rate: 18, is_service: 1, sale_account: '', purchase_account: '', qty: '', rate: '', date: '', narration: '' },
-    { name: 'EXAMPLE-4  already-existing item — rename to an existing item name to UPDATE it', unit: 'nos', hsn: '', gst_rate: 12, is_service: 0, sale_account: '', purchase_account: '', qty: 20, rate: 120, date: '2026-08-20', narration: 'Opening from old books' },
+    { name: 'EXAMPLE-4  already-existing item — rename to an existing item name to UPDATE it', unit: 'nos', hsn: '', gst_rate: 12, is_service: 0, sale_account: '', purchase_account: '', qty: 20, rate: 120, date: '20/08/2026', narration: 'Opening from old books' },
   ];
   const mapping = [
     'SAMPLE FILE — SINGLE FORMAT: how to fill the Stock Items upload (master + stock + date in ONE file)',
@@ -200,7 +200,7 @@ export async function exportKindSample(kind, c) {
     '  purchase_account-> name of the ledger used when this item is bought (blank = default Purchases)',
     '  qty             -> NEW: opening stock qty you already hold (optional). If filled with rate, stock will be auto-added.',
     '  rate            -> NEW: rate per unit ₹ for opening stock (required if qty filled).',
-    '  date            -> NEW: date of buying YYYY-MM-DD for tracking buy vs sell age (optional, default = today/books begin). Grouped by date — each different date creates its own Stock Journal voucher.',
+    '  date            -> NEW: date of buying DD/MM/YYYY for tracking buy vs sell age — e.g. 15/08/2026 (optional, default = today/books begin). Grouped by date — each different date creates its own Stock Journal voucher.',
     '  narration       -> NEW: batch / supplier ref / remarks for this purchase (optional).',
     '',
     'SINGLE FORMAT EXAMPLE: fill name,unit,hsn,gst_rate,qty,rate,date,narration in same row and upload once.',
@@ -500,7 +500,13 @@ export function importKind(kind, c, rows, { mode = 'add', date, counterpart_id }
       const cls = CLASS_BY_LABEL[String(r.class || '').trim().toLowerCase()];
       if (!cls || !['receipt', 'payment', 'contra', 'journal'].includes(cls)) { pushErr(i, `class must be Receipt, Payment, Contra or Journal (got "${N(r.class)}").`); continue; }
       const date = N(r.date);
-      if (!validISO(date)) { pushErr(i, `date must be YYYY-MM-DD (got "${date}").`); continue; }
+      if (!validISO(date)) { // also try DD/MM/YYYY
+      const m = date.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (m) {
+        const iso = `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+        if (validISO(iso)) { r.date = iso; } else { pushErr(i, `date must be DD/MM/YYYY (e.g. 15/04/2026) (got "${date}").`); continue; }
+      } else { pushErr(i, `date must be DD/MM/YYYY (e.g. 15/04/2026) (got "${date}").`); continue; }
+    }
       const de = dateInBook(c, date);
       if (de) { pushErr(i, de); continue; }
       const drAcc = findAccount(c, r.dr_account);

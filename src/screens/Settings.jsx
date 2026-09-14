@@ -298,6 +298,77 @@ export function SettingsScreen() {
         <h3>💾 Auto-backup — your data is safe</h3>
         <BackupPanel />
       </div>
+      <div className="card" style={{ borderLeft: '4px solid #3498db' }}>
+        <h3>🕒 System Date & Time Check — DD/MM/YYYY</h3>
+        <SystemTimePanel />
+      </div>
+      <div className="card" style={{ borderLeft: '4px solid #9b59b6' }}>
+        <h3>🔄 Auto-update — No need to close server manually</h3>
+        <p className="muted" style={{ margin: '0 0 10px', fontSize: 13 }}>
+          <b>v1.11.21 FIXED:</b> When you click <b>Update now</b>, server auto-restarts itself in 4 seconds — <b>you DON'T need to close CMD or press Ctrl+C</b>. It kills old port 8080, starts new server, deletes temp files. Just wait 10 sec and press <b>Ctrl+F5</b>. Fixed yellow error for space path like ADITYA MISHRA.
+        </p>
+        <ul style={{ margin: '0 0 0 18px', fontSize: 12.5, lineHeight: 1.7 }} className="muted">
+          <li>Click <b>Update now</b> → browser shows "Downloading..." → server logs "Restarting after update..."</li>
+          <li>Old server exits automatically → new bat waits 4 sec → starts node server/run.js</li>
+          <li>Just keep browser open, wait for banner v1.11.21 in CMD, then Ctrl+F5</li>
+          <li>If yellow popup still appears (old v1.11.6), run KILL_YELLOW_ERROR.bat once</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function SystemTimePanel() {
+  const { notify } = useApp();
+  const [info, setInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const j = await fetch('/api/system-time').then(r=>r.json());
+      setInfo(j);
+    } catch (e) {
+      setInfo({ error: e.message });
+    }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+  if (loading) return <div className="empty">Checking system time...</div>;
+  if (!info || info.error || !info.ok) return <div className="errbox">{info?.error || info?.message || 'Could not check time'}</div>;
+  const st = info.serverTime;
+  const it = info.internetTime;
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+        <div>
+          <div className="faint" style={{ fontSize: 11, textTransform: 'uppercase' }}>This PC Server Time (DD/MM/YYYY)</div>
+          <div style={{ fontSize: 16, fontWeight: 'bold', fontFamily: 'var(--mono)', marginTop: 4 }}>{st?.dd_mm_yyyy_hh_mm_ss}</div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>ISO: {st?.iso} · TZ: {st?.timezone} · Uptime: {Math.floor((st?.uptime_seconds||0)/60)} min</div>
+        </div>
+        <div>
+          <div className="faint" style={{ fontSize: 11, textTransform: 'uppercase' }}>Internet Time (for verification)</div>
+          {it ? (
+            <>
+              <div style={{ fontSize: 16, fontWeight: 'bold', fontFamily: 'var(--mono)', marginTop: 4 }}>{it.dd_mm_yyyy_hh_mm_ss}</div>
+              <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>Source: {it.source} · Diff: {info.timeDiffMinutes} min</div>
+            </>
+          ) : (
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Internet time unavailable (offline) — {info.timeError || 'no internet'}</div>
+          )}
+        </div>
+      </div>
+      <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 6, background: info.timeOk ? '#eafaf1' : '#fdedec', border: `1px solid ${info.timeOk ? '#2ecc71' : '#e74c3c'}` }}>
+        <div style={{ fontSize: 13, color: info.timeOk ? '#1e8449' : '#c0392b' }}>{info.message}</div>
+        {!info.timeOk && (
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            <b>How to fix Windows time:</b> Settings → Time & Language → Date & Time → Turn ON "Set time automatically" and "Set time zone automatically" → Sync now.
+          </div>
+        )}
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+        <button className="btn ghost sm" onClick={load}>↻ Re-check time now</button>
+        <span className="faint" style={{ fontSize: 11 }}>All dates use DD/MM/YYYY (e.g. 15/09/2026) — system time must be correct for accurate books.</span>
+      </div>
     </div>
   );
 }

@@ -418,6 +418,71 @@ api.get('/export/invoice_excel_template', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// ---------- system time check — ensures date/time correct for vouchers/invoices ----------
+function fmtDDMMYYYY_HHMMSS(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function fmtDDMMYYYY(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+api.get('/system-time', async (req, res) => {
+  try {
+    const now = new Date();
+    const serverTime = {
+      iso: now.toISOString(),
+      dd_mm_yyyy: fmtDDMMYYYY(now),
+      dd_mm_yyyy_hh_mm_ss: fmtDDMMYYYY_HHMMSS(now),
+      locale: now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timestamp: now.getTime(),
+      uptime_seconds: Math.floor(process.uptime())
+    };
+
+    // Try to get internet time to verify system clock is correct
+    let internetTime = null;
+    let timeDiffMinutes = null;
+    let timeOk = true;
+    let timeError = null;
+
+    const timeSources = [
+      { url: 'https://worldtimeapi.org/api/timezone/Asia/Kolkata', pick: (j) => j.datetime ? new Date(j.datetime) : null },
+      { url: 'https://timeapi.io/api/Time/current/zone?timeZone=Asia/Kolkata', pick: (j) => j.dateTime ? new Date(j.dateTime) : null },
+    ];
+
+    for (const src of timeSources) {
+      try {
+        const r = await fetch(src.url, { signal: AbortSignal.timeout(5000), headers: { Accept: 'application/json' } });
+        if (!r.ok) continue;
+        const j = await r.json();
+        const dt = src.pick(j);
+        if (dt && !isNaN(dt.getTime())) {
+          internetTime = { iso: dt.toISOString(), dd_mm_yyyy_hh_mm_ss: fmtDDMMYYYY_HHMMSS(dt), source: src.url };
+          const diffMs = Math.abs(now.getTime() - dt.getTime());
+          timeDiffMinutes = Math.round(diffMs / 60000);
+          timeOk = diffMs < 5 * 60 * 1000; // OK if within 5 min
+          break;
+        }
+      } catch (e) {
+        timeError = e.message;
+      }
+    }
+
+    ok(res, {
+      serverTime,
+      internetTime,
+      timeDiffMinutes,
+      timeOk,
+      timeError,
+      message: timeOk
+        ? (internetTime ? `✓ System time is correct (diff ${timeDiffMinutes} min from internet). All voucher dates in DD/MM/YYYY will be accurate.` : 'System time check: internet time unavailable, but server time is ' + serverTime.dd_mm_yyyy_hh_mm_ss)
+        : `⚠ System time may be wrong! Server: ${serverTime.dd_mm_yyyy_hh_mm_ss}, Internet: ${internetTime?.dd_mm_yyyy_hh_mm_ss || 'unavailable'} — diff ${timeDiffMinutes} min. Please correct Windows date/time (Settings → Time & Language → Set time automatically).`
+    });
+  } catch (e) { fail(res, e); }
+});
+
 // phone access info (which address a phone on the same Wi-Fi can open / install)
 api.get('/phone-info', (req, res) => {
   try {
@@ -797,15 +862,32 @@ api.post('/update/apply', async (req, res) => {
     }
 
     // 6. tell the browser it worked, then restart this server in a moment
-    res.json({ ok: true, installed: latest });
+    res.json({ ok: true, installed: latest, message: 'Update installed — server auto-restarts in 4 sec, NO need to close manually. Just wait and press Ctrl+F5.' });
     // (the new instance waits ~3s so the old one has fully released port 8080)
     setTimeout(() => {
       try {
         if (process.platform === 'win32') {
           const bat = path.join(APP_ROOT, '_apply-restart.bat');
           // Fix for space in path like ADITYA MISHRA - %~dp0. avoids trailing \ escaping quote, this caused Windows cannot find '\C:\Users\ADITYA'
-          fs.writeFileSync(bat, "@echo off\r\ncd /d \"%~dp0.\"\r\ntimeout /t 3 /nobreak >nul\r\nstart \"\" /b node server\\run.js\r\n");
-          const p = spawn('cmd.exe', ['/c', 'start', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore' });
+          const batContent = [
+            '@echo off',
+            'setlocal',
+            'rem ONS Books Auto-restart after update — v1.11.21 — NO MANUAL CLOSE NEEDED',
+            'rem FIX for ADITYA MISHRA space path — %~dp0. avoids trailing backslash escaping quote',
+            'cd /d "%~dp0."',
+            'echo [%date% %time%] Restarting after update... >> update-restart.log',
+            'timeout /t 4 /nobreak >nul',
+            'for /f "tokens=5" %%a in (\'netstat -aon ^| findstr :8080 ^| findstr LISTENING\') do taskkill /f /pid %%a >nul 2>nul',
+            'timeout /t 1 /nobreak >nul',
+            'start "" /b node "server\\run.js" >> server.log 2>&1',
+            'echo [%date% %time%] New server started >> update-restart.log',
+            'timeout /t 2 /nobreak >nul',
+            'del "%~f0" >nul 2>nul',
+            'endlocal',
+            'exit /b 0'
+          ].join('\r\n');
+          fs.writeFileSync(bat, batContent);
+          const p = spawn('cmd.exe', ['/c', 'start', '/b', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore', windowsHide: true });
           p.unref();
         } else {
           const p = spawn('/bin/sh', ['-c', 'sleep 3; npm run build; exec node server/run.js'], { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
