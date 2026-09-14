@@ -788,7 +788,6 @@ const TAG_URLS = [
   'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/version.js'
 ].filter(Boolean);
 const TAG_URL = TAG_URLS[0];
-const TAG_URL = process.env.ONS_UPDATE_VERSION_URL || 'https://raw.githubusercontent.com/onsoutsourcingsolutions-svg/TallyClone/arena/01a0827e-tallyclone/version.js';
 
 // paths that are never replaced by an update — v1.11.28: NO LONGER SKIP node_modules when using FULL zip (hosted via GitHub, includes deps, so update is truly self-contained)
 // For small zip we still skip node_modules to keep existing, but for full zip we update it
