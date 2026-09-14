@@ -169,22 +169,22 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
         <b style={{ color: 'var(--gold-hi)' }}>v1.11.41 FIX — Sales total explained:</b> Stock import creates <b style={{ color: 'var(--ink)' }}>stock_journal</b> vouchers (class = stock_journal, Dr Inventory Cr Reserves) — it does <b>NOT</b> touch Sales ledger, so it does <b>NOT</b> inflate sales. If you imported via <b>Invoice Excel</b>, that creates <b>sales</b> vouchers (correct). Previous build had bug: Total = FY + Month (double count) and Amount = debit/credit included stock valuation (COGS+Inventory) → inflated. Now fixed: Taxable sales = sales ledger only, Invoice value = party amount incl GST excl stock valuation.
       </div>
       <div className="kpis" style={{ marginBottom: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-        <div className="kpi" style={{ borderColor: 'var(--gold)', background: 'linear-gradient(180deg, rgba(212,175,55,0.14), #000)', cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Total sales done FY — taxable only, stock import NOT included — click to see Day Book">
+        <div className="kpi" style={{ borderColor: 'var(--gold)', background: 'linear-gradient(180deg, rgba(212,175,55,0.14), #000)', cursor: 'pointer' }} onClick={() => setView({ name: 'voucher', cls: 'sales' })} title="Total sales done FY — taxable only, stock import NOT included — click to stay in Sales">
           <div className="k" style={{ color: 'var(--gold)' }}>Total Sales Done FY (Taxable)</div>
           <div className="v" style={{ color: 'var(--gold-hi)', fontSize: 18 }}>{salesDash ? inr(Math.round(salesDash.sales?.fy||0)) : (salesList.length ? `${salesList.length} bills` : '—')}</div>
           <div className="s" style={{ color: 'var(--ink-dim)' }}>FY taxable · Excludes stock import · {salesDash?.sales?.countFY||salesList.length} invoices · Click ↓</div>
         </div>
-        <div className="kpi" style={{ borderColor: 'var(--gold-hi)', background: 'linear-gradient(180deg, rgba(212,175,55,0.18), #000)', cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Invoice value FY incl GST — this is what you see as 927954 — party Dr total excl stock valuation">
+        <div className="kpi" style={{ borderColor: 'var(--gold-hi)', background: 'linear-gradient(180deg, rgba(212,175,55,0.18), #000)', cursor: 'pointer' }} onClick={() => setView({ name: 'voucher', cls: 'sales' })} title="Invoice value FY incl GST — click to stay in Sales">
           <div className="k" style={{ color: 'var(--gold-hi)' }}>Total Invoice Value FY (incl GST)</div>
           <div className="v" style={{ color: 'var(--gold-hi)', fontSize: 18 }}>{salesDash ? inr(Math.round(salesDash.sales?.invoiceFY||0)) : '—'}</div>
           <div className="s" style={{ color: 'var(--ink-dim)' }}>FY invoice incl GST · If you see 927954, this should match · Click ↓</div>
         </div>
-        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Sales this month taxable">
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'voucher', cls: 'sales' })} title="Sales this month taxable — click to stay in Sales">
           <div className="k">Sales This Month (Taxable)</div>
           <div className="v" style={{ color: 'var(--gold-hi)' }}>{salesDash ? inr(Math.round(salesDash.sales?.month||0)) : '—'}</div>
           <div className="s">Month taxable · {salesDash ? inr(Math.round(salesDash.sales?.invoiceMonth||0)) + ' invoice' : ''} · Click ↓</div>
         </div>
-        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Total invoices FY">
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'voucher', cls: 'sales' })} title="Total invoices FY — click to stay in Sales">
           <div className="k">Invoices Count FY</div>
           <div className="v">{salesDash ? (salesDash.sales?.countFY||0) : salesList.length}</div>
           <div className="s">FY {salesDash?.sales?.countMonth||0} this month · All {salesList.length} · Click ↓</div>
