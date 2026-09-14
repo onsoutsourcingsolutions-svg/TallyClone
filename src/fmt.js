@@ -11,16 +11,18 @@ export function inr(p, { sym = true, dec = true } = {}) {
 }
 export function qty(n) { return Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 4 }); }
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export function dshort(iso) {
+export function ddMMyyyy(iso) {
   if (!iso) return '';
-  const [y, m, d] = iso.split('-');
-  return `${Number(d)} ${MONTHS[Number(m) - 1]} ${y.slice(2)}`;
+  const s = String(iso).slice(0, 10);
+  const [y, m, d] = s.split('-');
+  if (!y || !m || !d) return String(iso);
+  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+}
+export function dshort(iso) {
+  return ddMMyyyy(iso);
 }
 export function dlong(iso) {
-  if (!iso) return '';
-  const [y, m, d] = iso.split('-');
-  const M = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  return `${Number(d)} ${M[Number(m) - 1]} ${y}`;
+  return ddMMyyyy(iso);
 }
 export function todayISO() {
   const d = new Date();

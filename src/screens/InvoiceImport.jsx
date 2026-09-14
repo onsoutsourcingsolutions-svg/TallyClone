@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../state.jsx';
-import { inr } from '../fmt.js';
+import { inr, ddMMyyyy } from '../fmt.js';
 
 export function InvoiceImportScreen() {
   const { company, notify } = useApp();
@@ -83,9 +83,9 @@ export function InvoiceImportScreen() {
           <h3>Preview — {preview.count} invoices found in Excel (tabular bulk)</h3>
           <div style={{ maxHeight: 300, overflowY: 'auto' }}>
             <table className="grid" style={{ fontSize: 12 }}>
-              <thead><tr><th>Invoice No</th><th>Date</th><th>Buyer</th><th>GSTIN</th><th>Items</th><th>Regime</th></tr></thead>
+              <thead><tr><th>Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Buyer</th><th>GSTIN</th><th>Items</th><th>Regime</th></tr></thead>
               <tbody>{preview.bulk.map((p, i) => (
-                <tr key={i}><td>{p.invoice_no}</td><td>{p.date}</td><td>{p.buyer.name}</td><td>{p.buyer.gstin || '—'}</td><td>{p.items.length}</td><td>{p.regime}</td></tr>
+                <tr key={i}><td>{p.invoice_no}</td><td>{ddMMyyyy(p.date)}</td><td>{p.buyer.name}</td><td>{p.buyer.gstin || '—'}</td><td>{p.items.length}</td><td>{p.regime}</td></tr>
               ))}</tbody>
             </table>
           </div>
@@ -100,7 +100,7 @@ export function InvoiceImportScreen() {
           <h3>Preview — {preview.parsed._source === 'tabular' ? 'Tabular sheet detected' : 'Formatted PI-200 sheet detected'}</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
             <div>
-              <div><b>Invoice No:</b> {preview.parsed.invoice_no} · <b>Date:</b> {preview.parsed.date} · <b>Ref:</b> {preview.parsed.ref || '—'}</div>
+              <div><b>Invoice No:</b> {preview.parsed.invoice_no} · <b>Date:</b> {ddMMyyyy(preview.parsed.date)} · <b>Ref:</b> {preview.parsed.ref || '—'}</div>
               <div style={{ marginTop: 8 }}><b>Buyer:</b> {preview.parsed.buyer.name}</div>
               <div className="muted" style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{preview.parsed.buyer.address}</div>
               <div><b>GSTIN:</b> {preview.parsed.buyer.gstin || '—'}</div>
@@ -134,7 +134,7 @@ export function InvoiceImportScreen() {
         <div className="card" style={{ borderColor: 'var(--gold)' }}>
           <h3>✅ Invoice booked</h3>
           <div style={{ fontSize: 13 }}>
-            <div><b>{result.voucher.class.toUpperCase()}</b> No. {result.voucher.number || ('#' + result.voucher.voucher_no)} · Date {result.voucher.date} · {result.parsed.buyer.name}</div>
+            <div><b>{result.voucher.class.toUpperCase()}</b> No. {result.voucher.number || ('#' + result.voucher.voucher_no)} · Date {ddMMyyyy(result.voucher.date)} · {result.parsed.buyer.name}</div>
             <div className="muted" style={{ marginTop: 4 }}>Voucher ID {result.voucher.id} · {result.voucher.items.length} item(s) · Taxable {inr(result.voucher.items.reduce((s, it) => s + it.amount, 0))}</div>
           </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -149,9 +149,9 @@ export function InvoiceImportScreen() {
           <h3>✅ {result.count} invoices booked from Excel</h3>
           <div style={{ maxHeight: 260, overflowY: 'auto' }}>
             <table className="grid" style={{ fontSize: 12 }}>
-              <thead><tr><th>Invoice No</th><th>Date</th><th>Voucher ID</th><th></th></tr></thead>
+              <thead><tr><th>Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Voucher ID</th><th></th></tr></thead>
               <tbody>{result.vouchers.map((v, i) => (
-                <tr key={i}><td>{v.number || '#' + v.voucher_no}</td><td>{v.date}</td><td>{v.id}</td><td><button className="btn ghost sm" onClick={() => printVoucher(v.id)}>🖨 Print</button></td></tr>
+                <tr key={i}><td>{v.number || '#' + v.voucher_no}</td><td>{ddMMyyyy(v.date)}</td><td>{v.id}</td><td><button className="btn ghost sm" onClick={() => printVoucher(v.id)}>🖨 Print</button></td></tr>
               ))}</tbody>
             </table>
           </div>

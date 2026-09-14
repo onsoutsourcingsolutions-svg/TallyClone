@@ -23,7 +23,7 @@ export function invDate(iso) {
   if (!iso) return '';
   const [y, m, d] = String(iso).slice(0, 10).split('-');
   if (!y || !m || !d) return String(iso);
-  return `${d}-${m}-${y}`;
+  return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`;
 }
 
 /* ---------- amount in words (Indian system) ---------- */
