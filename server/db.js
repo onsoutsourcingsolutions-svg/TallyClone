@@ -141,6 +141,20 @@ db.exec(`INSERT OR IGNORE INTO meta(k,v) VALUES ('schema_version','1')`);
   const companyCols = db.prepare('PRAGMA table_info(companies)').all().map(c => c.name);
   if (!companyCols.includes('logo')) db.exec(`ALTER TABLE companies ADD COLUMN logo TEXT NOT NULL DEFAULT ''`);
 }
+{
+  // v1.11.42: add invoice_type to vouchers — only tax_invoice affects stock
+  const voucherCols = db.prepare('PRAGMA table_info(vouchers)').all().map(c => c.name);
+  if (!voucherCols.includes('invoice_type')) {
+    db.exec(`ALTER TABLE vouchers ADD COLUMN invoice_type TEXT NOT NULL DEFAULT 'tax_invoice'`);
+    console.log('[migrate] Added vouchers.invoice_type column default tax_invoice');
+  }
+  // v1.11.42 retro-fix: existing vouchers with PI- / PROFORMA / QUOTATION / ESTIMATE numbers should be proforma (no stock)
+  try {
+    const upd = db.prepare(`UPDATE vouchers SET invoice_type='proforma' WHERE UPPER(COALESCE(number,'')) LIKE 'PI-%' OR UPPER(COALESCE(number,'')) LIKE 'PI/%' OR UPPER(COALESCE(number,'')) LIKE '%PROFORMA%' OR UPPER(COALESCE(number,'')) LIKE '%QUOTATION%' OR UPPER(COALESCE(number,'')) LIKE '%ESTIMATE%' OR UPPER(COALESCE(number,'')) LIKE 'QT-%' OR UPPER(COALESCE(number,'')) LIKE 'EST-%'`);
+    const res = upd.run();
+    if (res.changes > 0) console.log('[migrate] Marked', res.changes, 'vouchers as proforma (PI-/PROFORMA/QT/EST) — they will NOT affect stock');
+  } catch (e) { console.log('[migrate] proforma retro-fix skip', e.message); }
+}
 
 export function tx(fn) {
   db.exec('BEGIN IMMEDIATE');

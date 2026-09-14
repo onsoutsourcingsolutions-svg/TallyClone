@@ -4,6 +4,29 @@ import { toPaise, todayISO, validISO, addDaysISO, fyEnd, roundHalfEven, CLASS_ME
 
 export function fmtP(p) { return (Number(p) / 100).toFixed(2); }
 
+// v1.11.42: Only TAX INVOICE affects stock — PI, PROFORMA, QUOTATION, ESTIMATE etc do NOT
+export function isTaxInvoiceVoucher(v) {
+  // v can be voucher row from DB or object with number/invoice_type/narration
+  const invType = String(v.invoice_type || v.invoiceType || 'tax_invoice').toLowerCase();
+  if (invType !== 'tax_invoice') return false;
+  const num = String(v.number || '').toUpperCase();
+  // PI- prefix or PROFORMA in number means proforma
+  if (num.startsWith('PI-') || num.startsWith('PI/') || num.includes('PROFORMA') || num.includes('QUOTATION') || num.includes('ESTIMATE') || num.startsWith('QT-') || num.startsWith('EST-')) return false;
+  // Also check narration/ref for explicit proforma marker? Only if number is empty and narration says proforma
+  // We keep it strict to number + invoice_type to avoid false positives on party names
+  return true;
+}
+export function voucherAffectsStock(v) {
+  // stock_journal always affects stock (opening stock)
+  // For invoice classes, only tax_invoice affects stock
+  if (v.class === 'stock_journal') return true;
+  if (['sales','purchase','credit_note','debit_note'].includes(v.class)) {
+    return isTaxInvoiceVoucher(v);
+  }
+  return false;
+}
+
+
 // ============================ COMPANIES ============================
 const SEED_LEDGERS = [
   ['Cash in Hand', 'cash_in_hand', 'Asset', 'Cash'],
@@ -166,10 +189,11 @@ export function resolveDutyAccount(c, role, leg, rate) {
 
 // ============================ INVENTORY (weighted average) ============================
 export function inventoryMoves(itemId) {
+  // v1.11.42: Only TAX INVOICE affects stock — exclude PI/PROFORMA etc
   return db.prepare(`
-    SELECT ie.*, v.date FROM item_entries ie
+    SELECT ie.*, v.date, v.number, v.invoice_type, v.narration, v.ref, v.class FROM item_entries ie
     JOIN vouchers v ON v.id = ie.voucher_id
-    WHERE ie.item_id = ? AND v.active = 1
+    WHERE ie.item_id = ? AND v.active = 1 AND (v.class='stock_journal' OR (v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI/%' AND UPPER(COALESCE(v.number,'')) NOT LIKE '%PROFORMA%' AND UPPER(COALESCE(v.number,'')) NOT LIKE '%QUOTATION%' AND UPPER(COALESCE(v.number,'')) NOT LIKE '%ESTIMATE%'))
     ORDER BY v.date, v.id, ie.line_no`).all(itemId);
 }
 export function inventoryState(itemId, asOf = null) {
@@ -221,19 +245,22 @@ const RETURN_CLASSES = new Set(['credit_note', 'debit_note']);
 function openVoucherRow(c, payload, vid) {
   const date = payload.date || todayISO();
   const now = todayISO();
+  const invType = String(payload.invoice_type || payload.invoiceType || 'tax_invoice').toLowerCase() === 'proforma' || String(payload.invoice_type || '').toUpperCase().includes('PROFORMA') || String(payload.number||'').toUpperCase().startsWith('PI-') ? (String(payload.invoice_type||'').toLowerCase().includes('proforma') || String(payload.number||'').toUpperCase().startsWith('PI-') ? 'proforma' : 'tax_invoice') : String(payload.invoice_type || 'tax_invoice').toLowerCase();
+  // Normalize: only tax_invoice affects stock, everything else is non-stock
+  const normalizedType = (invType === 'tax_invoice' || invType === 'tax') ? 'tax_invoice' : 'proforma';
   if (vid) {
     const exists = db.prepare('SELECT * FROM vouchers WHERE id = ? AND company_id = ?').get(vid, c.id);
     if (!exists) throw vErr('Voucher not found.', 404);
-    db.prepare('UPDATE vouchers SET date=?, number=?, narration=?, ref=?, ref_date=?, updated_at=? WHERE id=?')
+    db.prepare('UPDATE vouchers SET date=?, number=?, narration=?, ref=?, ref_date=?, invoice_type=?, updated_at=? WHERE id=?')
       .run(date, String(payload.number || '').trim(), String(payload.narration || ''),
-        String(payload.ref || ''), payload.ref_date || null, now, vid);
+        String(payload.ref || ''), payload.ref_date || null, normalizedType, now, vid);
     return vid;
   }
   const no = nextVoucherNo(c.id, payload.class);
-  const r = db.prepare(`INSERT INTO vouchers(company_id,class,voucher_no,date,number,narration,ref,ref_date,created_at,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?)`)
+  const r = db.prepare(`INSERT INTO vouchers(company_id,class,voucher_no,date,number,narration,ref,ref_date,invoice_type,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
     .run(c.id, payload.class, no, date, String(payload.number || '').trim(), String(payload.narration || ''),
-      String(payload.ref || ''), payload.ref_date || null, now, now);
+      String(payload.ref || ''), payload.ref_date || null, normalizedType, now, now);
   return Number(r.lastInsertRowid);
 }
 
@@ -318,11 +345,17 @@ function buildInvoice(c, vid, payload) {
   const role = (cls === 'sales' || cls === 'credit_note') ? 'OUT' : 'IN';
   const isGoodsReturn = isReturn;
 
-  // availability guard: goods leaving inventory must exist (sales & supplier returns)
-  if (cls === 'sales' || (isReturn && cls === 'debit_note')) {
+  // v1.11.42: Only TAX INVOICE affects stock — PI/PROFORMA/QUOTATION etc do NOT
+  const invTypeRaw = String(payload.invoice_type || row.invoice_type || 'tax_invoice').toLowerCase();
+  const numUpper = String(payload.number || row.number || '').toUpperCase();
+  const isProformaByNumber = numUpper.startsWith('PI-') || numUpper.startsWith('PI/') || numUpper.includes('PROFORMA') || numUpper.includes('QUOTATION') || numUpper.includes('ESTIMATE') || numUpper.startsWith('QT-') || numUpper.startsWith('EST-');
+  const affectsStock = (invTypeRaw === 'tax_invoice' || invTypeRaw === 'tax') && !isProformaByNumber;
+
+  // availability guard: only if affects stock
+  if (affectsStock && (cls === 'sales' || (isReturn && cls === 'debit_note'))) {
     for (const x of resolved) {
       const st = inventoryState(x.item.id);
-      if (st.qty + 1e-9 < x.qty) throw vErr(`Item "${x.item.name}": insufficient stock — only ${roundQ(st.qty)} ${x.item.unit} available.`);
+      if (st.qty + 1e-9 < x.qty) throw vErr(`Item "${x.item.name}": insufficient stock — only ${roundQ(st.qty)} ${x.item.unit} available. For PI/Proforma, set invoice type to Proforma to skip stock check.`);
     }
   }
   if (isGoodsReturn && cls === 'debit_note') {
@@ -333,9 +366,8 @@ function buildInvoice(c, vid, payload) {
   }
 
   wipeChildren(vid);
-  // pre-compute inventory valuations BEFORE inserting any lines of this voucher
-  // (state must not include this voucher's own pending stock movements)
-  const stockVals = (cls === 'sales' || cls === 'credit_note')
+  // pre-compute inventory valuations BEFORE inserting any lines of this voucher (only if affects stock)
+  const stockVals = affectsStock && (cls === 'sales' || cls === 'credit_note')
     ? resolved.map(x => avgOutValue(x.item.id, x.qty).value)
     : null;
   let line = 0;
@@ -343,22 +375,25 @@ function buildInvoice(c, vid, payload) {
   const saleAccId = ex.sales_account_id;
   if (cls === 'sales' || cls === 'credit_note') {
     // -------- sales & sales returns (customer) --------
-    if (cls === 'sales') insE(c.id, vid, line++, party.id, invoiceTotal, 0, 'To Sales', null, 0);
-    else insE(c.id, vid, line++, party.id, 0, invoiceTotal, 'By Credit Note', null, 0);
+    // v1.11.42: PI/Proforma does NOT affect stock — only accounting entries, no item_entries, no COGS
+    if (cls === 'sales') insE(c.id, vid, line++, party.id, invoiceTotal, 0, 'To Sales' + (affectsStock ? '' : ' (PI/Proforma — no stock)'), null, 0);
+    else insE(c.id, vid, line++, party.id, 0, invoiceTotal, 'By Credit Note' + (affectsStock ? '' : ' (Proforma — no stock)'), null, 0);
     if (!saleAccId) throw vErr('Default sales account not configured (Settings → Accounts).');
     const byAcc = new Map();
     for (const x of resolved) {
       const accId = x.item.sale_account_id || saleAccId;
       byAcc.set(accId, (byAcc.get(accId) || 0) + x.amount);
-      insIE(c.id, vid, line, x.item.id, x.qty, x.ratePaise, x.amount, cls === 'sales' ? 'out' : 'in');
-      line++;
+      if (affectsStock) {
+        insIE(c.id, vid, line, x.item.id, x.qty, x.ratePaise, x.amount, cls === 'sales' ? 'out' : 'in');
+        line++;
+      }
     }
     for (const [accId, amt] of byAcc) insE(c.id, vid, line++, accId, cls === 'credit_note' ? amt : 0, cls === 'sales' ? amt : 0, cls === 'sales' ? 'By Sales' : 'To Sales Returns', null, 0);
     for (const b of taxBuckets) {
       const acc = resolveDutyAccount(c, role, b.leg, b.rate);
       insE(c.id, vid, line++, acc.id, cls === 'credit_note' ? b.tax : 0, cls === 'sales' ? b.tax : 0, cls === 'sales' ? 'By ' + acc.name : 'To ' + acc.name + ' reversal', b.base, 0);
     }
-    if (ex.cogs_account_id && invId) {
+    if (affectsStock && ex.cogs_account_id && invId) {
       if (cls === 'sales') {
         const stockVal = stockVals.reduce((s, v) => s + v, 0);
         if (stockVal > 0) {
@@ -366,7 +401,6 @@ function buildInvoice(c, vid, payload) {
           insE(c.id, vid, line++, invId, 0, stockVal, 'Stock valuation (auto)', null, 1);
         }
       } else {
-        // goods come back in at average COST (reverses the COGS booked at sale time)
         const backVal = stockVals.reduce((s, v) => s + v, 0);
         if (backVal > 0) {
           insE(c.id, vid, line++, invId, backVal, 0, 'Stock return at cost (auto)', null, 1);
@@ -378,18 +412,25 @@ function buildInvoice(c, vid, payload) {
     // -------- purchase & purchase returns (supplier) --------
     if (!invId) throw vErr('Default inventory account not configured (Settings).');
     if (cls === 'purchase') {
-      for (const x of resolved) { insIE(c.id, vid, line, x.item.id, x.qty, x.ratePaise, x.amount, 'in'); line++; }
-      insE(c.id, vid, line++, invId, baseTotal, 0, 'To Stock (auto)', null, 1);
+      if (affectsStock) {
+        for (const x of resolved) { insIE(c.id, vid, line, x.item.id, x.qty, x.ratePaise, x.amount, 'in'); line++; }
+        insE(c.id, vid, line++, invId, baseTotal, 0, 'To Stock (auto)', null, 1);
+      } else {
+        // Proforma purchase — no stock, only expense? For PI, we still post to purchases but not stock? User says dont include in stock, so skip inventory
+        insE(c.id, vid, line++, ex.purchases_account_id || invId, baseTotal, 0, 'To Purchase (Proforma — no stock)', null, 0);
+      }
       for (const b of taxBuckets) {
         const acc = resolveDutyAccount(c, role, b.leg, b.rate);
         insE(c.id, vid, line++, acc.id, b.tax, 0, 'To ' + acc.name, b.base, 0);
       }
-      insE(c.id, vid, line++, party.id, 0, invoiceTotal, 'By Purchase', null, 0);
+      insE(c.id, vid, line++, party.id, 0, invoiceTotal, 'By Purchase' + (affectsStock ? '' : ' (Proforma — no stock)'), null, 0);
     } else {
-      // debit note: party Dr, goods Cr at bill value, ITC reversed
-      for (const x of resolved) { insIE(c.id, vid, line, x.item.id, x.qty, x.ratePaise, x.amount, 'out'); line++; }
-      insE(c.id, vid, line++, party.id, invoiceTotal, 0, 'To Debit Note', null, 0);
-      insE(c.id, vid, line++, invId, 0, baseTotal, 'Stock return out (auto)', null, 1);
+      // debit note
+      if (affectsStock) {
+        for (const x of resolved) { insIE(c.id, vid, line, x.item.id, x.qty, x.ratePaise, x.amount, 'out'); line++; }
+        insE(c.id, vid, line++, invId, 0, baseTotal, 'Stock return out (auto)', null, 1);
+      }
+      insE(c.id, vid, line++, party.id, invoiceTotal, 0, 'To Debit Note' + (affectsStock ? '' : ' (Proforma — no stock)'), null, 0);
       for (const b of taxBuckets) {
         const acc = resolveDutyAccount(c, role, b.leg, b.rate);
         insE(c.id, vid, line++, acc.id, 0, b.tax, 'ITC reversal (auto)', b.base, 0);
@@ -625,9 +666,9 @@ export function stockReport(c, itemId, from, to) {
   const opening = inventoryState(itemId, addDaysISO(from, -1));
   let qty = opening.qty, value = opening.value;
   const rows = db.prepare(`
-    SELECT ie.*, v.date, v.class, v.voucher_no, v.number, v.narration, v.ref FROM item_entries ie
+    SELECT ie.*, v.date, v.class, v.voucher_no, v.number, v.narration, v.ref, v.invoice_type FROM item_entries ie
     JOIN vouchers v ON v.id = ie.voucher_id
-    WHERE ie.item_id = ? AND v.active = 1 AND v.date BETWEEN ? AND ?
+    WHERE ie.item_id = ? AND v.active = 1 AND v.date BETWEEN ? AND ? AND (v.class='stock_journal' OR (v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI/%' AND UPPER(COALESCE(v.number,'')) NOT LIKE '%PROFORMA%'))
     ORDER BY v.date, v.id, ie.line_no`).all(itemId, from, to).map(m => {
     const isIn = m.direction === 'in';
     if (isIn) { qty += m.qty; value += Number(m.amount); }
@@ -664,10 +705,10 @@ export function stockItemFullHistory(c, itemId, from = null, to = null) {
   let qty = opening.qty, value = opening.value;
 
   const rawMoves = db.prepare(`
-    SELECT ie.*, v.date, v.class, v.voucher_no, v.number, v.narration, v.ref, v.id as voucher_id_real
+    SELECT ie.*, v.date, v.class, v.voucher_no, v.number, v.narration, v.ref, v.invoice_type, v.id as voucher_id_real
     FROM item_entries ie
     JOIN vouchers v ON v.id = ie.voucher_id
-    WHERE ie.item_id = ? AND v.active = 1 AND v.company_id = ?
+    WHERE ie.item_id = ? AND v.active = 1 AND v.company_id = ? AND (v.class='stock_journal' OR (v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI/%' AND UPPER(COALESCE(v.number,'')) NOT LIKE '%PROFORMA%'))
     ORDER BY v.date ASC, v.id ASC, ie.line_no ASC
   `).all(itemId, c.id);
 
@@ -822,11 +863,12 @@ export function dashboard(c) {
     if (st.qty <= 1e-9) continue;
     const ins = db.prepare(`
       SELECT ie.qty, ie.amount, v.date FROM item_entries ie JOIN vouchers v ON v.id = ie.voucher_id
-      WHERE ie.item_id = ? AND v.active = 1 AND ie.direction = 'in' ORDER BY v.date ASC, v.id ASC
+      WHERE ie.item_id = ? AND v.active = 1 AND ie.direction = 'in' AND (v.class='stock_journal' OR (v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%'))
+      ORDER BY v.date ASC, v.id ASC
     `).all(it.id);
     const outs = db.prepare(`
       SELECT SUM(ie.qty) AS outQty FROM item_entries ie JOIN vouchers v ON v.id = ie.voucher_id
-      WHERE ie.item_id = ? AND v.active = 1 AND ie.direction = 'out'
+      WHERE ie.item_id = ? AND v.active = 1 AND ie.direction = 'out' AND (v.class='stock_journal' OR (v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%'))
     `).get(it.id);
     const outQty = Number(outs?.outQty || 0);
     let cumIn = 0;
@@ -939,11 +981,11 @@ export function dashboard(c) {
   for (const it of items.slice(0, 30)) {
     const lastBuy = db.prepare(`
       SELECT v.date, ie.qty, ie.rate FROM item_entries ie JOIN vouchers v ON v.id = ie.voucher_id
-      WHERE ie.item_id = ? AND ie.direction = 'in' AND v.active = 1 ORDER BY v.date DESC LIMIT 1
+      WHERE ie.item_id = ? AND ie.direction = 'in' AND v.active = 1 AND (v.class='stock_journal' OR (v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%')) ORDER BY v.date DESC LIMIT 1
     `).get(it.id);
     const lastSell = db.prepare(`
       SELECT v.date, ie.qty, ie.rate FROM item_entries ie JOIN vouchers v ON v.id = ie.voucher_id
-      WHERE ie.item_id = ? AND ie.direction = 'out' AND v.active = 1 ORDER BY v.date DESC LIMIT 1
+      WHERE ie.item_id = ? AND ie.direction = 'out' AND v.active = 1 AND v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%' ORDER BY v.date DESC LIMIT 1
     `).get(it.id);
     if (lastBuy || lastSell) {
       buySell.push({

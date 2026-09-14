@@ -854,23 +854,31 @@ async function importOneInvoice(c, parsed, filename) {
     const dbItem = ensureItem(c, it);
     itemRows.push({ item_id: dbItem.id, qty: it.qty, rate: it.rate, dbItem });
   }
-  for (const ir of itemRows) {
-    const st = inventoryState(ir.item_id);
-    if (st.qty + 1e-9 < ir.qty) {
-      const need = ir.qty - st.qty;
-      const ctr = findStockCounterpart(c);
-      if (!ctr) throw vErr('No balancing account for opening stock — create a Reserves & Surplus / Capital ledger first (Masters → Ledgers).');
-      const payload = {
-        class: 'stock_journal',
-        date: c.books_begin_from || parsed.date,
-        number: '',
-        narration: `Auto stock-in for invoice import ${parsed.invoice_no} — ${ir.dbItem.name} +${need} ${ir.dbItem.unit}`,
-        counterpart_id: ctr.id,
-        items: [{ item_id: ir.item_id, qty: need, rate: ir.rate, direction: 'in' }],
-      };
-      createVoucher(c, payload);
+  // v1.11.42: Only auto stock-in for TAX INVOICE, not for PI/Proforma
+  const invNoUpperCheck = String(parsed.invoice_no || '').toUpperCase();
+  const isProformaForStock = invNoUpperCheck.startsWith('PI-') || invNoUpperCheck.startsWith('PI/') || invNoUpperCheck.includes('PROFORMA') || invNoUpperCheck.includes('QUOTATION') || invNoUpperCheck.includes('ESTIMATE');
+  if (!isProformaForStock) {
+    for (const ir of itemRows) {
+      const st = inventoryState(ir.item_id);
+      if (st.qty + 1e-9 < ir.qty) {
+        const need = ir.qty - st.qty;
+        const ctr = findStockCounterpart(c);
+        if (!ctr) throw vErr('No balancing account for opening stock — create a Reserves & Surplus / Capital ledger first (Masters → Ledgers).');
+        const payload = {
+          class: 'stock_journal',
+          date: c.books_begin_from || parsed.date,
+          number: '',
+          narration: `Auto stock-in for invoice import ${parsed.invoice_no} — ${ir.dbItem.name} +${need} ${ir.dbItem.unit}`,
+          counterpart_id: ctr.id,
+          items: [{ item_id: ir.item_id, qty: need, rate: ir.rate, direction: 'in' }],
+        };
+        createVoucher(c, payload);
+      }
     }
   }
+  // v1.11.42: PI/Proforma should NOT affect stock — only Tax Invoice affects stock
+  const invNoUpper = String(parsed.invoice_no || '').toUpperCase();
+  const isProformaInvoice = invNoUpper.startsWith('PI-') || invNoUpper.startsWith('PI/') || invNoUpper.includes('PROFORMA') || invNoUpper.includes('QUOTATION') || invNoUpper.includes('ESTIMATE') || invNoUpper.startsWith('QT-') || invNoUpper.startsWith('EST-');
   const payload = {
     class: 'sales',
     date: parsed.date,
@@ -881,6 +889,7 @@ async function importOneInvoice(c, parsed, filename) {
     regime: parsed.regime || 'intra',
     items: itemRows.map(r => ({ item_id: r.item_id, qty: r.qty, rate: r.rate })),
     auto_tax: true,
+    invoice_type: isProformaInvoice ? 'proforma' : 'tax_invoice',
   };
   const v = createVoucher(c, payload);
   return { parsed, voucher: v };

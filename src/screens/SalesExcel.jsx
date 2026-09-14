@@ -50,7 +50,8 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
     party: '',
     ref: '',
     regime: (company.extras && company.extras.tax_regime_default) || 'intra',
-    narration: ''
+    narration: '',
+    invoice_type: 'tax_invoice'
   });
   const [rows, setRows] = useState(() => Array.from({ length: 8 }, () => ({ name: '', hsn: '', qty: '', rate: '', gst: '' })));
 
@@ -97,6 +98,8 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
     if (!items2.length) { setErr('Add at least one item row'); return; }
     setBusy(true);
     try {
+      const isProformaNum = String(header.number||'').toUpperCase().startsWith('PI-') || String(header.number||'').toUpperCase().includes('PROFORMA');
+      const invType = isProformaNum ? 'proforma' : (header.invoice_type || 'tax_invoice');
       const body = {
         class: 'sales',
         date: header.date,
@@ -106,13 +109,14 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
         regime: header.regime,
         party_id: partyAcc.id,
         items: items2,
-        auto_tax: true
+        auto_tax: true,
+        invoice_type: invType
       };
       const j = await api('/vouchers', { body });
       notify(`Sales ${j.voucher.number || '#' + j.voucher.voucher_no} saved ✓ Total ${inr(sum.total)} — stock matched dynamically`);
       onSaved && onSaved(j.voucher);
       setRows(Array.from({ length: 8 }, () => ({ name: '', hsn: '', qty: '', rate: '', gst: '' })));
-      setHeader(h => ({ ...h, number: '', ref: '', narration: '' }));
+      setHeader(h => ({ ...h, number: '', ref: '', narration: '', invoice_type: 'tax_invoice' }));
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   };
@@ -216,13 +220,15 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
 
       {mode === 'grid' && (
         <>
-          <div className="frow" style={{ marginBottom: 8 }}>
+          <div className="frow" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
             <label className="f" style={{ maxWidth: 150 }}><span>Date (DD/MM/YYYY)</span><input type="date" value={header.date} onChange={e => setHeader({ ...header, date: e.target.value })} /></label>
-            <label className="f" style={{ maxWidth: 150 }}><span>Invoice No.</span><input value={header.number} onChange={e => setHeader({ ...header, number: e.target.value })} placeholder="auto" /></label>
+            <label className="f" style={{ maxWidth: 160 }}><span>Invoice Type *</span><select value={header.invoice_type} onChange={e => setHeader({ ...header, invoice_type: e.target.value })} style={{ borderColor: header.invoice_type==='proforma' ? '#e0a06b' : 'var(--gold)' }}><option value="tax_invoice">Tax Invoice (stock)</option><option value="proforma">PI/Proforma (NO stock)</option></select></label>
+            <label className="f" style={{ maxWidth: 150 }}><span>Invoice No.</span><input value={header.number} onChange={e => { const v=e.target.value; const up=v.toUpperCase(); const isPI=up.startsWith('PI-')||up.includes('PROFORMA'); setHeader({ ...header, number: v, invoice_type: isPI ? 'proforma' : header.invoice_type }); }} placeholder="auto" style={{ borderColor: String(header.number||'').toUpperCase().startsWith('PI-') && header.invoice_type==='tax_invoice' ? '#e06b6b' : '' }} /></label>
             <label className="f" style={{ minWidth: 220 }}><span>Party (debtor) *</span><input list="sales-party-list" value={header.party} onChange={e => setHeader({ ...header, party: e.target.value })} placeholder="Type party name…" /></label>
             <label className="f" style={{ maxWidth: 150 }}><span>GST Regime</span><select value={header.regime} onChange={e => setHeader({ ...header, regime: e.target.value })}><option value="intra">Intra (CGST+SGST)</option><option value="inter">Inter (IGST)</option></select></label>
             <label className="f" style={{ maxWidth: 150 }}><span>Ref</span><input value={header.ref} onChange={e => setHeader({ ...header, ref: e.target.value })} placeholder="PO / Ref" /></label>
           </div>
+          {header.invoice_type==='proforma' && <div className="errbox" style={{ borderColor: '#e0a06b', background: 'rgba(224,160,107,0.12)', color: '#e0a06b', fontSize: 11, marginBottom: 8 }}>⚠ PI/Proforma — will NOT affect stock, only accounting. Only Tax Invoice affects stock.</div>}
           <datalist id="sales-party-list">{partyOpts.map(a => <option key={a.id} value={a.name} />)}</datalist>
           <datalist id="sales-item-list">{itemOpts.map(it => <option key={it.id} value={`${it.name} — ${it.stock_qty ?? 0} ${it.unit} in hand`} />)}</datalist>
 

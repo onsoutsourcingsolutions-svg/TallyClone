@@ -217,14 +217,17 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
       return {
         date: todayISO(), num: '', party: '', narration: '', ref: '',
         regime: (company.extras && company.extras.tax_regime_default) || 'intra',
+        invoice_type: 'tax_invoice',
         rows: [{ name: '', qty: '1', rate: '' }],
       };
     }
     const entry = (v.entries || []).find((e) => ['SundryDebtor', 'SundryCreditor'].includes(e.kind)) || (v.entries || [])[0];
     const hasIGST = (v.entries || []).some((e) => /IGST/.test(e.account_name || ''));
+    const invTypeRaw = String(v.invoice_type || 'tax_invoice').toLowerCase();
     return {
       date: v.date, num: v.number, party: entry ? entry.account_name : '', narration: v.narration, ref: v.ref,
       regime: hasIGST ? 'inter' : 'intra',
+      invoice_type: invTypeRaw === 'proforma' || String(v.number||'').toUpperCase().startsWith('PI-') ? 'proforma' : 'tax_invoice',
       rows: (v.items || []).map((it) => ({ name: it.item_name, qty: String(it.qty), rate: String(it.rate / 100) })),
     };
   };
@@ -235,8 +238,17 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
   const [narration, setNarration] = useState(init.narration);
   const [ref, setRef] = useState(init.ref);
   const [regime, setRegime] = useState(init.regime);
+  const [invoiceType, setInvoiceType] = useState(init.invoice_type || 'tax_invoice');
   const [rows, setRows] = useState(init.rows);
   const [err, setErr] = useState('');
+
+  // auto-detect proforma from number PI- prefix
+  useEffect(() => {
+    const up = String(num || '').toUpperCase();
+    if (up.startsWith('PI-') || up.startsWith('PI/') || up.includes('PROFORMA')) {
+      if (invoiceType === 'tax_invoice') setInvoiceType('proforma');
+    }
+  }, [num]);
 
   const compute = () => {
     let taxable = 0;
@@ -275,7 +287,7 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
     }
     if (!items2.length) return setErr('Add at least one item line.');
     try {
-      const body = { class: cls, date, number: num, narration, ref, regime, party_id: partyAcc.id, items: items2, auto_tax: true };
+      const body = { class: cls, date, number: num, narration, ref, regime, party_id: partyAcc.id, items: items2, auto_tax: true, invoice_type: invoiceType };
       const j = editing
         ? await api('/vouchers/' + editing.id, { method: 'PATCH', body })
         : await api('/vouchers', { body });
@@ -291,9 +303,15 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
     <div className="card">
       {editing && <h3>Edit {label} #{editing.voucher_no} <span className="faint" style={{ textTransform: 'none', letterSpacing: 0 }}>(save = new version; old version kept in Edit Log)</span></h3>}
       <Err e={err} />
-      <div className="frow" style={{ marginBottom: 10 }}>
+      <div className="frow" style={{ marginBottom: 10, flexWrap: 'wrap' }}>
         <label className="f" style={{ maxWidth: 170 }}><span>Date</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-        <label className="f" style={{ maxWidth: 190 }}><span>{reverse ? 'Note no.' : 'Invoice no.'} (optional)</span><input value={num} onChange={(e) => setNum(e.target.value)} placeholder="auto" /></label>
+        <label className="f" style={{ maxWidth: 170 }}><span>Invoice Type *</span>
+          <select value={invoiceType} onChange={(e) => setInvoiceType(e.target.value)} style={{ borderColor: invoiceType==='proforma' ? '#e0a06b' : 'var(--gold)' }}>
+            <option value="tax_invoice">Tax Invoice (affects stock)</option>
+            <option value="proforma">PI / Proforma / Quotation (NO stock)</option>
+          </select>
+        </label>
+        <label className="f" style={{ maxWidth: 190 }}><span>{reverse ? 'Note no.' : 'Invoice no.'} (optional)</span><input value={num} onChange={(e) => setNum(e.target.value)} placeholder="auto" style={{ borderColor: String(num||'').toUpperCase().startsWith('PI-') && invoiceType==='tax_invoice' ? '#e06b6b' : '' }} /></label>
         <label className="f" style={{ maxWidth: 190 }}><span>Ref against</span><input value={ref} onChange={(e) => setRef(e.target.value)} placeholder={cls === 'sales' || cls === 'credit_note' ? 'invoice / PO' : 'bill no.'} /></label>
         <label className="f" style={{ minWidth: 200 }}><span>Party ({cls === 'sales' || cls === 'credit_note' ? 'debtor' : 'creditor'}) *</span>
           <input list={listP} value={party} onChange={(e) => setParty(e.target.value)} placeholder="Type name…" />
@@ -305,6 +323,7 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
           </select>
         </label>
       </div>
+      {invoiceType==='proforma' && <div className="errbox" style={{ borderColor: '#e0a06b', background: 'rgba(224,160,107,0.12)', color: '#e0a06b' }}>⚠ PI / Proforma / Quotation — this voucher will NOT affect stock (only accounting). Only Tax Invoice affects stock.</div>}
       <datalist id={listP}>{partyOpts.map((a) => <option key={a.id} value={a.name} />)}</datalist>
       <datalist id={listI}>{itemOpts.map((it) => <option key={it.id} value={it.name} />)}</datalist>
       <div className="lines">
