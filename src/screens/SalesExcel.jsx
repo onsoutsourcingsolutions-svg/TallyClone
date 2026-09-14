@@ -160,37 +160,49 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
         <b style={{ color: 'var(--gold)' }}>Hover or click any stock item</b> to see full history: when bought, when sold, against which party. Same as Invoice Excel → Print tab. <b style={{ color: 'var(--gold-hi)' }}>All KPIs dynamic — click to drill down.</b>
       </p>
 
-      {/* TOTAL SALE DONE — dynamic from dashboard + sales list */}
-      <div className="kpis" style={{ marginBottom: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-        <div className="kpi" style={{ borderColor: 'var(--gold)', background: 'linear-gradient(180deg, rgba(212,175,55,0.14), #000)', cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Total sales done — click to see Day Book">
-          <div className="k" style={{ color: 'var(--gold)' }}>Total Sales Done (All Time)</div>
-          <div className="v" style={{ color: 'var(--gold-hi)', fontSize: 18 }}>{salesDash ? inr(Math.round((salesDash.sales?.fy||0) + (salesDash.sales?.month||0))) : (salesList.length ? `${salesList.length} bills` : '—')}</div>
-          <div className="s" style={{ color: 'var(--ink-dim)' }}>FY {salesDash ? inr(Math.round(salesDash.sales?.fy||0)) : '—'} · {salesList.length} invoices · Click ↓</div>
+      {/* TOTAL SALE DONE — v1.11.41 FIX: stock import does NOT inflate sales, fix fy+month double count bug */}
+      <div style={{ border: '1px solid var(--gold-line)', borderRadius: 6, padding: '8px 10px', marginBottom: 10, background: 'rgba(212,175,55,0.06)', fontSize: 12, color: 'var(--ink-dim)' }}>
+        <b style={{ color: 'var(--gold-hi)' }}>v1.11.41 FIX — Sales total explained:</b> Stock import creates <b style={{ color: 'var(--ink)' }}>stock_journal</b> vouchers (class = stock_journal, Dr Inventory Cr Reserves) — it does <b>NOT</b> touch Sales ledger, so it does <b>NOT</b> inflate sales. If you imported via <b>Invoice Excel</b>, that creates <b>sales</b> vouchers (correct). Previous build had bug: Total = FY + Month (double count) and Amount = debit/credit included stock valuation (COGS+Inventory) → inflated. Now fixed: Taxable sales = sales ledger only, Invoice value = party amount incl GST excl stock valuation.
+      </div>
+      <div className="kpis" style={{ marginBottom: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+        <div className="kpi" style={{ borderColor: 'var(--gold)', background: 'linear-gradient(180deg, rgba(212,175,55,0.14), #000)', cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Total sales done FY — taxable only, stock import NOT included — click to see Day Book">
+          <div className="k" style={{ color: 'var(--gold)' }}>Total Sales Done FY (Taxable)</div>
+          <div className="v" style={{ color: 'var(--gold-hi)', fontSize: 18 }}>{salesDash ? inr(Math.round(salesDash.sales?.fy||0)) : (salesList.length ? `${salesList.length} bills` : '—')}</div>
+          <div className="s" style={{ color: 'var(--ink-dim)' }}>FY taxable · Excludes stock import · {salesDash?.sales?.countFY||salesList.length} invoices · Click ↓</div>
         </div>
-        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Sales this month — drill down">
-          <div className="k">Sales This Month</div>
+        <div className="kpi" style={{ borderColor: 'var(--gold-hi)', background: 'linear-gradient(180deg, rgba(212,175,55,0.18), #000)', cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Invoice value FY incl GST — this is what you see as 927954 — party Dr total excl stock valuation">
+          <div className="k" style={{ color: 'var(--gold-hi)' }}>Total Invoice Value FY (incl GST)</div>
+          <div className="v" style={{ color: 'var(--gold-hi)', fontSize: 18 }}>{salesDash ? inr(Math.round(salesDash.sales?.invoiceFY||0)) : '—'}</div>
+          <div className="s" style={{ color: 'var(--ink-dim)' }}>FY invoice incl GST · If you see 927954, this should match · Click ↓</div>
+        </div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Sales this month taxable">
+          <div className="k">Sales This Month (Taxable)</div>
           <div className="v" style={{ color: 'var(--gold-hi)' }}>{salesDash ? inr(Math.round(salesDash.sales?.month||0)) : '—'}</div>
-          <div className="s">Month dynamic · Click ↓</div>
+          <div className="s">Month taxable · {salesDash ? inr(Math.round(salesDash.sales?.invoiceMonth||0)) + ' invoice' : ''} · Click ↓</div>
         </div>
-        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Total invoices">
-          <div className="k">Invoices Count</div>
-          <div className="v">{salesList.length}</div>
-          <div className="s">Click to view Day Book ↓</div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Total invoices FY">
+          <div className="k">Invoices Count FY</div>
+          <div className="v">{salesDash ? (salesDash.sales?.countFY||0) : salesList.length}</div>
+          <div className="s">FY {salesDash?.sales?.countMonth||0} this month · All {salesList.length} · Click ↓</div>
         </div>
-        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'reports', which: 'stock' })} title="Stock value linked to sales">
-          <div className="k">Stock Value</div>
-          <div className="v">{salesDash ? inr(Math.round(salesDash.stock?.totalValue||0)) : '—'}</div>
-          <div className="s">{salesDash?.stock?.count||0} items · Click ↓</div>
+        <div className="kpi" style={{ cursor: 'pointer', borderStyle: 'dashed' }} onClick={() => setView({ name: 'reports', which: 'stock' })} title="Stock value — separate, NOT part of sales, already measured">
+          <div className="k" style={{ color: 'var(--ink-dim)' }}>Stock Value (Not Sales)</div>
+          <div className="v" style={{ color: 'var(--ink)' }}>{salesDash ? inr(Math.round(salesDash.stock?.totalValue||0)) : '—'}</div>
+          <div className="s" style={{ color: 'var(--ink-faint)' }}>{salesDash?.stock?.count||0} items · Separate · Click stock ↓</div>
         </div>
       </div>
 
       {salesList.length > 0 && (
-        <div style={{ maxHeight: 160, overflowY: 'auto', marginBottom: 12, border: '1px solid var(--gold-line-soft)', borderRadius: 6, background: '#000' }}>
+        <div style={{ maxHeight: 180, overflowY: 'auto', marginBottom: 12, border: '1px solid var(--gold-line-soft)', borderRadius: 6, background: '#000' }}>
           <table className="grid" style={{ fontSize: 12, color: 'var(--ink)' }}>
-            <thead><tr><th style={{ color: 'var(--gold)', background: '#000' }}>Date DD/MM/YYYY</th><th style={{ color: 'var(--gold)', background: '#000' }}>Invoice No</th><th style={{ color: 'var(--gold)', background: '#000' }}>Buyer</th><th style={{ color: 'var(--gold)', background: '#000' }} className="tright">Amount</th><th style={{ color: 'var(--gold)', background: '#000' }}></th></tr></thead>
-            <tbody>{salesList.slice(0,10).map(v => <tr key={v.id} style={{ cursor: 'pointer', background: 'rgba(212,175,55,0.03)' }} onClick={() => setViewVoucherId(v.id)} title="Click to drill down — view voucher & print"><td style={{ color: 'var(--ink-dim)' }}>{ddMMyyyy(v.date)}</td><td style={{ color: 'var(--gold-hi)' }}>{v.number || '#'+v.voucher_no}</td><td style={{ color: 'var(--ink)' }}>{v.narration?.slice(0,30) || '—'}</td><td className="tright" style={{ color: 'var(--gold)' }}>{inr(Math.round(Math.max(v.debit||0, v.credit||0)))}</td><td><button className="btn ghost sm" onClick={(e)=>{e.stopPropagation(); setViewVoucherId(v.id);}}>👁 Drill</button></td></tr>)}</tbody>
+            <thead><tr><th style={{ color: 'var(--gold)', background: '#000' }}>Date DD/MM/YYYY</th><th style={{ color: 'var(--gold)', background: '#000' }}>Invoice No</th><th style={{ color: 'var(--gold)', background: '#000' }}>Buyer</th><th style={{ color: 'var(--gold)', background: '#000' }} className="tright">Invoice Incl GST</th><th style={{ color: 'var(--gold)', background: '#000' }} className="tright">Taxable</th><th style={{ color: 'var(--gold)', background: '#000' }}></th></tr></thead>
+            <tbody>{salesList.slice(0,10).map(v => {
+              const inv = v.invoice_total || Math.max(v.debit||0, v.credit||0);
+              // taxable approx = invoice - GST, but we show invoice_total now correct
+              return <tr key={v.id} style={{ cursor: 'pointer', background: 'rgba(212,175,55,0.03)' }} onClick={() => setViewVoucherId(v.id)} title="Click to drill down — view voucher & print — invoice excl stock valuation"><td style={{ color: 'var(--ink-dim)' }}>{ddMMyyyy(v.date)}</td><td style={{ color: 'var(--gold-hi)' }}>{v.number || '#'+v.voucher_no}</td><td style={{ color: 'var(--ink)' }}>{v.narration?.slice(0,30) || '—'}</td><td className="tright" style={{ color: 'var(--gold-hi)' }}>{inr(Math.round(inv))}</td><td className="tright" style={{ color: 'var(--ink-dim)', fontSize: 11 }}>{inr(Math.round(v.debit||0)) !== inr(Math.round(inv)) ? 'see voucher' : ''}</td><td><button className="btn ghost sm" onClick={(e)=>{e.stopPropagation(); setViewVoucherId(v.id);}}>👁 Drill</button></td></tr>;
+            })}</tbody>
           </table>
-          <div style={{ fontSize: 11, color: 'var(--ink-dim)', padding: '6px 8px' }}>Recent 10 sales — click any row to drill down to voucher detail & print — dynamic, updates live after booking</div>
+          <div style={{ fontSize: 11, color: 'var(--ink-dim)', padding: '6px 8px' }}>Recent 10 sales — Amount = Invoice incl GST excl stock valuation (party Dr) — fixed v1.11.41 — click any row to drill down — stock import (stock_journal) never appears here</div>
         </div>
       )}
 

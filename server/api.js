@@ -294,10 +294,13 @@ api.get('/vouchers', (req, res) => {
   if (!c) return;
   const from = req.query.from || c.books_begin_from;
   const to = req.query.to || todayISO();
+  // v1.11.41 FIX: debit/credit previously included stock valuation (COGS + inventory) inflating sales total
+  // Now also return invoice_total = party amount (debtors for sales/credit_note, creditors for purchase/debit_note) = actual invoice value incl GST, excluding stock valuation
   let sql = `
     SELECT v.id, v.class, v.voucher_no, v.date, v.number, v.narration, v.ref,
       (SELECT COALESCE(SUM(e.debit),0) FROM entries e WHERE e.voucher_id = v.id) AS debit,
       (SELECT COALESCE(SUM(e.credit),0) FROM entries e WHERE e.voucher_id = v.id) AS credit,
+      (SELECT COALESCE(SUM(CASE WHEN v.class='sales' THEN e.debit - e.credit WHEN v.class='credit_note' THEN e.credit - e.debit WHEN v.class='purchase' THEN e.credit - e.debit WHEN v.class='debit_note' THEN e.debit - e.credit ELSE 0 END),0) FROM entries e JOIN accounts a ON a.id=e.account_id WHERE e.voucher_id=v.id AND a.group_code IN ('sundry_debtors','sundry_creditors')) AS invoice_total,
       (SELECT COUNT(*) FROM entries e WHERE e.voucher_id = v.id) AS lines
     FROM vouchers v WHERE v.company_id = ? AND v.active = 1 AND v.date BETWEEN ? AND ?`;
   const params = [c.id, from, to];
@@ -305,7 +308,7 @@ api.get('/vouchers', (req, res) => {
   if (req.query.account) { sql += ' AND v.id IN (SELECT voucher_id FROM entries WHERE account_id = ?)'; params.push(Number(req.query.account)); }
   sql += ' ORDER BY v.date, v.id DESC';
   ok(res, {
-    rows: db.prepare(sql).all(...params).map(r => ({ ...r, debit: Number(r.debit), credit: Number(r.credit), lines: Number(r.lines) })),
+    rows: db.prepare(sql).all(...params).map(r => ({ ...r, debit: Number(r.debit), credit: Number(r.credit), invoice_total: Number(r.invoice_total), lines: Number(r.lines) })),
   });
 });
 

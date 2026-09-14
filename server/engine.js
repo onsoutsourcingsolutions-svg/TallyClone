@@ -846,7 +846,8 @@ export function dashboard(c) {
   aging.sort((a, b) => b.daysInStock - a.daysInStock);
   const oldStock = aging.slice(0, 10);
 
-  // sales / purchase totals
+  // sales / purchase totals — v1.11.41 FIX: stock import (stock_journal) must NOT inflate sales, only sales group
+  // taxable sales (sales ledger credit - debit)
   const salesRows = db.prepare(`
     SELECT SUM(e.credit - e.debit) AS total FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id
     WHERE e.company_id = ? AND v.active = 1 AND a.group_code IN ('sales','income_direct') AND v.date BETWEEN ? AND ?
@@ -858,6 +859,25 @@ export function dashboard(c) {
     WHERE e.company_id = ? AND v.active = 1 AND a.group_code IN ('sales','income_direct') AND v.date BETWEEN ? AND ?
   `).get(c.id, fyFrom, fyEndDate);
   const salesFY = Number(salesFYRows?.total || 0);
+
+  // v1.11.41: invoice value including GST — sum of party Dr for sales minus Cr for credit notes
+  // This is what user expects as total sales 927954 — invoice total, not just taxable
+  const salesInvMonthRow = db.prepare(`
+    SELECT SUM(CASE WHEN v.class='sales' THEN e.debit - e.credit WHEN v.class='credit_note' THEN e.credit - e.debit ELSE 0 END) AS total
+    FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id
+    WHERE e.company_id = ? AND v.active = 1 AND v.class IN ('sales','credit_note') AND a.group_code='sundry_debtors' AND v.date BETWEEN ? AND ?
+  `).get(c.id, monthFrom, asOn);
+  const salesInvoiceMonth = Number(salesInvMonthRow?.total || 0);
+
+  const salesInvFYRow = db.prepare(`
+    SELECT SUM(CASE WHEN v.class='sales' THEN e.debit - e.credit WHEN v.class='credit_note' THEN e.credit - e.debit ELSE 0 END) AS total
+    FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id
+    WHERE e.company_id = ? AND v.active = 1 AND v.class IN ('sales','credit_note') AND a.group_code='sundry_debtors' AND v.date BETWEEN ? AND ?
+  `).get(c.id, fyFrom, fyEndDate);
+  const salesInvoiceFY = Number(salesInvFYRow?.total || 0);
+
+  const salesCountMonth = db.prepare(`SELECT COUNT(*) AS cnt FROM vouchers v WHERE v.company_id=? AND v.active=1 AND v.class='sales' AND v.date BETWEEN ? AND ?`).get(c.id, monthFrom, asOn);
+  const salesCountFY = db.prepare(`SELECT COUNT(*) AS cnt FROM vouchers v WHERE v.company_id=? AND v.active=1 AND v.class='sales' AND v.date BETWEEN ? AND ?`).get(c.id, fyFrom, fyEndDate);
 
   const purchRows = db.prepare(`
     SELECT SUM(e.debit - e.credit) AS total FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id
@@ -905,13 +925,14 @@ export function dashboard(c) {
   const gstOutputFY = gstFY.rows.filter(r => r.group_code === 'statutory_dues').reduce((s, r) => s + r.tax, 0);
   const gstInputFY = gstFY.rows.filter(r => r.group_code === 'input_tax_credit').reduce((s, r) => s + r.tax, 0);
 
-  // recent vouchers
+  // recent vouchers — v1.11.41 FIX: invoice_total excl stock valuation, stock_journal not in sales
   const recent = db.prepare(`
     SELECT v.id, v.class, v.voucher_no, v.date, v.number, v.narration,
       (SELECT COALESCE(SUM(e.debit),0) FROM entries e WHERE e.voucher_id = v.id) AS debit,
-      (SELECT COALESCE(SUM(e.credit),0) FROM entries e WHERE e.voucher_id = v.id) AS credit
+      (SELECT COALESCE(SUM(e.credit),0) FROM entries e WHERE e.voucher_id = v.id) AS credit,
+      (SELECT COALESCE(SUM(CASE WHEN v.class='sales' THEN e.debit - e.credit WHEN v.class='credit_note' THEN e.credit - e.debit WHEN v.class='purchase' THEN e.credit - e.debit WHEN v.class='debit_note' THEN e.debit - e.credit ELSE 0 END),0) FROM entries e JOIN accounts a ON a.id=e.account_id WHERE e.voucher_id=v.id AND a.group_code IN ('sundry_debtors','sundry_creditors')) AS invoice_total
     FROM vouchers v WHERE v.company_id = ? AND v.active = 1 ORDER BY v.date DESC, v.id DESC LIMIT 12
-  `).all(c.id).map(r => ({ ...r, debit: Number(r.debit), credit: Number(r.credit) }));
+  `).all(c.id).map(r => ({ ...r, debit: Number(r.debit), credit: Number(r.credit), invoice_total: Number(r.invoice_total) }));
 
   // buying vs selling tracking per item (last buy date, last sell date)
   const buySell = [];
@@ -941,7 +962,7 @@ export function dashboard(c) {
     receivables: { total: debtorsTotal, top: debtorsList },
     payables: { total: creditorsTotal, top: creditorsList },
     stock: { totalValue: stockValue, totalQty: stockQty, count: items.length, lowStock, outOfStock, topValue: topStockValue, aging: oldStock },
-    sales: { month: salesMonth, fy: salesFY },
+    sales: { month: salesMonth, fy: salesFY, invoiceMonth: salesInvoiceMonth, invoiceFY: salesInvoiceFY, countMonth: Number(salesCountMonth?.cnt||0), countFY: Number(salesCountFY?.cnt||0) },
     purchases: { month: purchMonth, fy: purchFY },
     cashflow: {
       receiptsMonth, paymentsMonth, netMonth: receiptsMonth - paymentsMonth,
