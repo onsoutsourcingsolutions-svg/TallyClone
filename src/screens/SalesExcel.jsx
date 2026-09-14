@@ -3,6 +3,8 @@ import { api, useApp } from '../state.jsx';
 import { inr, todayISO, ddMMyyyy, qty } from '../fmt.js';
 import { StockDetailModal } from './StockDetail.jsx';
 
+// v1.11.39: Total sales done + dynamic drill-down in Sales tab — BLACK GOLD
+
 // Sales Excel — spreadsheet-like entry + Excel upload in Sales column
 // v1.11.24: Multi-sheet Excel bills auto-import + stock dynamic matching + hover/click detail
 
@@ -15,7 +17,7 @@ function VoucherModalLazy({ voucherId, onClose, onDeleted }) {
 function rs2p(s) { return Math.round((Number(s) || 0) * 100); }
 
 export function SalesExcelPanel({ accounts, items, onSaved }) {
-  const { company, notify } = useApp();
+  const { company, notify, setView } = useApp();
   const [mode, setMode] = useState('grid'); // grid | upload
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -26,6 +28,14 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
   const [hoverPos, setHoverPos] = useState({ row: -1 });
   const [detailItem, setDetailItem] = useState(null); // item for full history modal
   const [viewVoucherId, setViewVoucherId] = useState(null);
+  const [salesDash, setSalesDash] = useState(null);
+  const [salesList, setSalesList] = useState([]);
+  useEffect(() => {
+    // Fetch dashboard for total sales done — dynamic
+    fetch('/api/dashboard').then(r=>r.json()).then(j=>{ if(j&&j.ok) setSalesDash(j); }).catch(()=>{});
+    // Fetch recent sales vouchers for drill-down
+    fetch('/api/vouchers?class=sales').then(r=>r.json()).then(j=>{ if(j&&j.ok) setSalesList(j.rows||[]); }).catch(()=>{});
+  }, []);
 
   // Grid state for manual Excel-like entry
   const partyOpts = accounts.filter(a => a.kind === 'SundryDebtor' || a.kind === 'Cash' || a.kind === 'Bank' || a.group_code === 'sundry_debtors');
@@ -143,12 +153,47 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
   };
 
   return (
-    <div className="card" style={{ borderColor: 'var(--gold)', background: 'var(--gold-soft)', borderLeft: '4px solid var(--gold)' }}>
-      <h3>📊 Sales — Excel View (multi-sheet + live stock)</h3>
-      <p className="muted" style={{ fontSize: 13, margin: '0 0 10px' }}>
-        <b style={{ color: 'var(--gold-hi)' }}>NEW v1.11.24 — Multi-sheet + Stock Drill-down:</b> <b>Upload ONE Excel where each sheet = one bill</b> → all sheets auto-booked in DD/MM/YYYY chrono order, stock matched dynamically to in-hand qty. 
-        <b>Hover or click any stock item</b> to see full history: when bought, when sold, against which party (buyer/supplier), rate, qty, balance. Same as Invoice Excel → Print tab.
+    <div className="card" style={{ borderColor: 'var(--gold)', background: 'linear-gradient(180deg, #1a170b, #000000)', borderLeft: '4px solid var(--gold)' }}>
+      <h3 style={{ color: 'var(--gold-hi)' }}>📊 Sales — Excel View (multi-sheet + live stock) — TOTAL SALE + DRILL-DOWN BLACK GOLD</h3>
+      <p className="muted" style={{ fontSize: 13, margin: '0 0 10px', color: 'var(--ink-dim)' }}>
+        <b style={{ color: 'var(--gold-hi)' }}>NEW v1.11.39 — Total Sale + Dynamic Drill-down:</b> <b style={{ color: 'var(--ink)' }}>Upload ONE Excel where each sheet = one bill</b> → all sheets auto-booked in DD/MM/YYYY chrono order, stock matched dynamically to in-hand qty. 
+        <b style={{ color: 'var(--gold)' }}>Hover or click any stock item</b> to see full history: when bought, when sold, against which party. Same as Invoice Excel → Print tab. <b style={{ color: 'var(--gold-hi)' }}>All KPIs dynamic — click to drill down.</b>
       </p>
+
+      {/* TOTAL SALE DONE — dynamic from dashboard + sales list */}
+      <div className="kpis" style={{ marginBottom: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <div className="kpi" style={{ borderColor: 'var(--gold)', background: 'linear-gradient(180deg, rgba(212,175,55,0.14), #000)', cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Total sales done — click to see Day Book">
+          <div className="k" style={{ color: 'var(--gold)' }}>Total Sales Done (All Time)</div>
+          <div className="v" style={{ color: 'var(--gold-hi)', fontSize: 18 }}>{salesDash ? inr(Math.round((salesDash.sales?.fy||0) + (salesDash.sales?.month||0))) : (salesList.length ? `${salesList.length} bills` : '—')}</div>
+          <div className="s" style={{ color: 'var(--ink-dim)' }}>FY {salesDash ? inr(Math.round(salesDash.sales?.fy||0)) : '—'} · {salesList.length} invoices · Click ↓</div>
+        </div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Sales this month — drill down">
+          <div className="k">Sales This Month</div>
+          <div className="v" style={{ color: 'var(--gold-hi)' }}>{salesDash ? inr(Math.round(salesDash.sales?.month||0)) : '—'}</div>
+          <div className="s">Month dynamic · Click ↓</div>
+        </div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Total invoices">
+          <div className="k">Invoices Count</div>
+          <div className="v">{salesList.length}</div>
+          <div className="s">Click to view Day Book ↓</div>
+        </div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'reports', which: 'stock' })} title="Stock value linked to sales">
+          <div className="k">Stock Value</div>
+          <div className="v">{salesDash ? inr(Math.round(salesDash.stock?.totalValue||0)) : '—'}</div>
+          <div className="s">{salesDash?.stock?.count||0} items · Click ↓</div>
+        </div>
+      </div>
+
+      {salesList.length > 0 && (
+        <div style={{ maxHeight: 160, overflowY: 'auto', marginBottom: 12, border: '1px solid var(--gold-line-soft)', borderRadius: 6, background: '#000' }}>
+          <table className="grid" style={{ fontSize: 12, color: 'var(--ink)' }}>
+            <thead><tr><th style={{ color: 'var(--gold)', background: '#000' }}>Date DD/MM/YYYY</th><th style={{ color: 'var(--gold)', background: '#000' }}>Invoice No</th><th style={{ color: 'var(--gold)', background: '#000' }}>Buyer</th><th style={{ color: 'var(--gold)', background: '#000' }} className="tright">Amount</th><th style={{ color: 'var(--gold)', background: '#000' }}></th></tr></thead>
+            <tbody>{salesList.slice(0,10).map(v => <tr key={v.id} style={{ cursor: 'pointer', background: 'rgba(212,175,55,0.03)' }} onClick={() => setViewVoucherId(v.id)} title="Click to drill down — view voucher & print"><td style={{ color: 'var(--ink-dim)' }}>{ddMMyyyy(v.date)}</td><td style={{ color: 'var(--gold-hi)' }}>{v.number || '#'+v.voucher_no}</td><td style={{ color: 'var(--ink)' }}>{v.narration?.slice(0,30) || '—'}</td><td className="tright" style={{ color: 'var(--gold)' }}>{inr(Math.round(Math.max(v.debit||0, v.credit||0)))}</td><td><button className="btn ghost sm" onClick={(e)=>{e.stopPropagation(); setViewVoucherId(v.id);}}>👁 Drill</button></td></tr>)}</tbody>
+          </table>
+          <div style={{ fontSize: 11, color: 'var(--ink-dim)', padding: '6px 8px' }}>Recent 10 sales — click any row to drill down to voucher detail & print — dynamic, updates live after booking</div>
+        </div>
+      )}
+
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <button className={`btn ${mode === 'grid' ? '' : 'ghost'}`} onClick={() => setMode('grid')}>📊 Excel Grid (type like Excel + stock live)</button>

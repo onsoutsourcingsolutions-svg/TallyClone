@@ -95,16 +95,16 @@ export function Gateway() {
         </div>
       )}
 
-      {/* ---------- TOP KPI ROW ---------- */}
+      {/* ---------- TOP KPI ROW — v1.11.39 DYNAMIC DRILL-DOWN BLACK GOLD — click any KPI to drill down ---------- */}
       <div className="kpis" style={{ marginBottom: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-        <div className="kpi" style={{ borderColor: 'var(--gold-line)' }}><div className="k">Bank balance</div><div className="v" style={{ color: 'var(--gold-hi)' }}>{fmt(bankTotal)}</div><div className="s">{d?.bank?.accounts?.length || 0} accounts</div></div>
-        <div className="kpi"><div className="k">Cash in hand</div><div className="v">{fmt(cashTotal)}</div><div className="s">{d?.cash?.accounts?.map(a => a.name).join(', ') || '—'}</div></div>
-        <div className="kpi"><div className="k">Receivables (Debtors)</div><div className="v" style={{ color: '#8ec07c' }}>{fmt(recvTotal)}</div><div className="s">{d?.receivables?.top?.length || 0} parties</div></div>
-        <div className="kpi"><div className="k">Payables (Creditors)</div><div className="v" style={{ color: '#e0a06b' }}>{fmt(payTotal < 0 ? -payTotal : payTotal)} {payTotal < 0 ? 'Cr' : ''}</div><div className="s">{d?.payables?.top?.length || 0} parties</div></div>
-        <div className="kpi"><div className="k">Stock value</div><div className="v">{fmt(stockVal)}</div><div className="s">{d?.stock?.count || 0} items · {fmtQty(d?.stock?.totalQty)} qty</div></div>
-        <div className="kpi"><div className="k">Sales (this month)</div><div className="v" style={{ color: 'var(--gold-hi)' }}>{fmt(salesM)}</div><div className="s">FY {fmt(d?.sales?.fy)}</div></div>
-        <div className="kpi"><div className="k">Purchases (month)</div><div className="v">{fmt(purchM)}</div><div className="s">FY {fmt(d?.purchases?.fy)}</div></div>
-        <div className="kpi"><div className="k">Profit (month)</div><div className="v" style={{ color: profitM >= 0 ? '#8ec07c' : '#e06b6b' }}>{fmt(profitM)}</div><div className="s">FY {fmt(d?.profit?.fy)}</div></div>
+        <div className="kpi" style={{ borderColor: 'var(--gold-line)', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }} onClick={() => setView({ name: 'reports', which: 'ledger' })} title="Click to drill down — Bank ledger & accounts"><div className="k">Bank balance</div><div className="v" style={{ color: 'var(--gold-hi)' }}>{fmt(bankTotal)}</div><div className="s">{d?.bank?.accounts?.length || 0} accounts · Click to drill ↓</div></div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'reports', which: 'ledger' })} title="Click to drill down — Cash ledger"><div className="k">Cash in hand</div><div className="v">{fmt(cashTotal)}</div><div className="s">{d?.cash?.accounts?.map(a => a.name).join(', ') || '—'} · Click ↓</div></div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'reports', which: 'bs' })} title="Click to drill down — Receivables list"><div className="k">Receivables (Debtors)</div><div className="v" style={{ color: '#8ec07c' }}>{fmt(recvTotal)}</div><div className="s">{d?.receivables?.top?.length || 0} parties · Click to drill ↓</div></div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'reports', which: 'bs' })} title="Click to drill down — Payables list"><div className="k">Payables (Creditors)</div><div className="v" style={{ color: '#e0a06b' }}>{fmt(payTotal < 0 ? -payTotal : payTotal)} {payTotal < 0 ? 'Cr' : ''}</div><div className="s">{d?.payables?.top?.length || 0} parties · Click ↓</div></div>
+        <div className="kpi" style={{ cursor: 'pointer', borderColor: 'var(--gold)' }} onClick={() => setView({ name: 'reports', which: 'stock' })} title="Click to drill down — Stock Summary with buy/sell vs party history"><div className="k">Stock value</div><div className="v">{fmt(stockVal)}</div><div className="s">{d?.stock?.count || 0} items · {fmtQty(d?.stock?.totalQty)} qty · Click ↓</div></div>
+        <div className="kpi" style={{ cursor: 'pointer', borderColor: 'var(--gold)', background: 'linear-gradient(180deg, rgba(212,175,55,0.12), rgba(0,0,0,0.8))' }} onClick={() => setView({ name: 'daybook' })} title="Click to drill down — Day Book Sales this month + FY total sales"><div className="k">Sales (this month)</div><div className="v" style={{ color: 'var(--gold-hi)' }}>{fmt(salesM)}</div><div className="s">FY {fmt(d?.sales?.fy)} · Click to drill ↓</div></div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Click to drill down — Purchases"><div className="k">Purchases (month)</div><div className="v">{fmt(purchM)}</div><div className="s">FY {fmt(d?.purchases?.fy)} · Click ↓</div></div>
+        <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'reports', which: 'pl' })} title="Click to drill down — Profit & Loss"><div className="k">Profit (month)</div><div className="v" style={{ color: profitM >= 0 ? '#8ec07c' : '#e06b6b' }}>{fmt(profitM)}</div><div className="s">FY {fmt(d?.profit?.fy)} · Click ↓</div></div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
@@ -113,9 +113,9 @@ export function Gateway() {
         <div className="card" style={{ flex: '1 1 320px', minWidth: 320 }}>
           <h3>💰 Cash flow · this month</h3>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '8px 0' }}>
-            <div><span className="muted" style={{ fontSize: 11 }}>Receipts</span><div className="num" style={{ color: '#8ec07c', fontSize: 18 }}>{fmt(d?.cashflow?.receiptsMonth)}</div></div>
-            <div><span className="muted" style={{ fontSize: 11 }}>Payments</span><div className="num" style={{ color: '#e06b6b', fontSize: 18 }}>{fmt(d?.cashflow?.paymentsMonth)}</div></div>
-            <div><span className="muted" style={{ fontSize: 11 }}>Net</span><div className="num" style={{ color: 'var(--gold-hi)', fontSize: 18 }}>{fmt(d?.cashflow?.netMonth)}</div></div>
+            <div style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Drill down — Receipts"><span className="muted" style={{ fontSize: 11 }}>Receipts · Click ↓</span><div className="num" style={{ color: '#8ec07c', fontSize: 18 }}>{fmt(d?.cashflow?.receiptsMonth)}</div></div>
+            <div style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'daybook' })} title="Drill down — Payments"><span className="muted" style={{ fontSize: 11 }}>Payments · Click ↓</span><div className="num" style={{ color: '#e06b6b', fontSize: 18 }}>{fmt(d?.cashflow?.paymentsMonth)}</div></div>
+            <div style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'reports', which: 'pl' })} title="Drill down — P&L"><span className="muted" style={{ fontSize: 11 }}>Net · Click ↓</span><div className="num" style={{ color: 'var(--gold-hi)', fontSize: 18 }}>{fmt(d?.cashflow?.netMonth)}</div></div>
           </div>
           <div className="faint" style={{ fontSize: 11.5 }}>FY: Receipts {fmt(d?.cashflow?.receiptsFY)} · Payments {fmt(d?.cashflow?.paymentsFY)} · Net {fmt(d?.cashflow?.netFY)}</div>
           <div style={{ marginTop: 10 }}>
