@@ -839,24 +839,38 @@ function newerThan(a, b) { // a > b ?
 }
 
 async function remoteBuildTag() {
+  // v1.11.35: Fetch ALL mirrors and pick NEWEST semver — fixes jsDelivr CDN cached on v1.11.31 while GitHub has v1.11.34
+  let bestTag = null;
+  let bestVer = null;
   let lastErr = null;
+  const all = [];
   for (const base of TAG_URLS) {
     try {
-      const url = base + (base.includes('?') ? '&' : '?') + 't=' + Date.now();
+      const url = base + (base.includes('?') ? '&' : '?') + 't=' + Date.now() + '_' + Math.random().toString(36).slice(2);
       const r = await fetch(url, {
         signal: AbortSignal.timeout(12000),
-        headers: { accept: 'text/plain, */*', 'user-agent': 'ONS-Books-updater', 'cache-control': 'no-cache' },
+        headers: { accept: 'text/plain, */*', 'user-agent': 'ONS-Books-updater', 'cache-control': 'no-cache, no-store', 'pragma': 'no-cache' },
       });
       if (!r.ok) { lastErr = new Error('update server ' + base + ' HTTP ' + r.status); continue; }
       const txt = await r.text();
       const m = /BUILD_TAG\s*=\s*'([^']+)'/.exec(txt);
       if (!m || !m[1]) { lastErr = new Error('unreadable reply from ' + base); continue; }
-      console.log('[update] remote tag from', base, '->', m[1]);
-      return m[1];
+      const tag = m[1];
+      const ver = semverOf(tag);
+      all.push({ base, tag, ver });
+      console.log('[update] remote tag from', base, '->', tag);
+      if (ver && (!bestVer || newerThan(ver, bestVer))) {
+        bestVer = ver;
+        bestTag = tag;
+      }
     } catch (e) {
       lastErr = e;
       console.warn('[update] failed to fetch tag from', base, e.message);
     }
+  }
+  if (bestTag) {
+    console.log('[update] picked newest tag', bestTag, 'from', all.map(a=>a.base+':'+a.tag).join(' | '));
+    return bestTag;
   }
   throw lastErr || new Error('all update servers failed');
 }
