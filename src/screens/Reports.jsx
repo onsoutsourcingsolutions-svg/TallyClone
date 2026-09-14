@@ -256,64 +256,134 @@ function LedgerView() {
   );
 }
 
-/* ================= Stock ================= */
+/* ================= Stock — v1.11.24 with hover/click party detail + dynamic stock ================= */
 function StockView() {
   const { company, notify } = useApp();
   const [items, setItems] = useState([]);
   const [itemId, setItemId] = useState('');
   const [from, setFrom] = useState(company.books_begin_from);
   const [to, setTo] = useState(todayISO());
+  const [detailItem, setDetailItem] = useState(null);
+  const [viewVoucherId, setViewVoucherId] = useState(null);
+  const [showFull, setShowFull] = useState(false);
+  const [fullData, setFullData] = useState(null);
+  const [fullErr, setFullErr] = useState('');
   useEffect(() => { api('/items').then((j) => setItems(j.rows.filter((i) => !i.is_service))).catch((e) => notify(e.message)); }, []);
   const [data, err] = useData(
     () => itemId ? api(`/reports/stock?item_id=${itemId}&from=${from}&to=${to}`) : Promise.resolve(null),
     [itemId, from, to]);
+
+  const openFullHistory = async (id) => {
+    setFullErr(''); setFullData(null);
+    try {
+      const j = await api(`/items/${id}/history?from=${from}&to=${to}`);
+      setFullData(j);
+      setShowFull(true);
+    } catch (e) { setFullErr(e.message); }
+  };
+
   return (
     <div>
-      <div className="card">
+      <div className="card" style={{ borderLeft: '4px solid var(--gold)' }}>
         <div className="frow">
-          <label className="f" style={{ minWidth: 220 }}><span>Item</span>
+          <label className="f" style={{ minWidth: 240 }}><span>Item — click 📜 for buy/sell vs party</span>
             <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
               <option value="">— choose item —</option>
-              {items.map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
+              {items.map((it) => <option key={it.id} value={it.id}>{it.name} — {it.stock_qty ?? 0} {it.unit} in hand</option>)}
             </select>
           </label>
-          <label className="f"><span>From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-          <label className="f"><span>To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          <label className="f"><span>From (DD/MM/YYYY)</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+          <label className="f"><span>To (DD/MM/YYYY)</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          {itemId && <button className="btn sm" style={{ alignSelf: 'flex-end' }} onClick={() => openFullHistory(itemId)}>📜 Full buy/sell history vs party</button>}
         </div>
+        <div className="faint" style={{ fontSize: 11, marginTop: 6 }}>NEW v1.11.24: Hover any row to see party GSTIN · Click voucher no. to view voucher · Click 📜 for full history: when bought, when sold, against which party, rate, balance — dynamically matched to stock in hand</div>
       </div>
       {err && <div className="errbox">{err}</div>}
+      {fullErr && <div className="errbox">{fullErr}</div>}
       {data && (
         <div className="card">
-          <div className="report-head">
-            <div className="h1">{data.item.name} <span className="faint" style={{ fontFamily: 'sans-serif', fontSize: 12 }}>· {data.item.unit} · HSN {data.item.hsn || '—'} · GST {data.item.gst_rate ?? 0}%</span></div>
-            <div className="h2">Stock statement · {dshort(data.from)} to {dshort(data.to)}</div>
+          <div className="report-head" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <div>
+              <div className="h1">{data.item.name} <span className="faint" style={{ fontFamily: 'sans-serif', fontSize: 12 }}>· {data.item.unit} · HSN {data.item.hsn || '—'} · GST {data.item.gst_rate ?? 0}%</span></div>
+              <div className="h2">Stock statement · {dshort(data.from)} to {dshort(data.to)} · All dates DD/MM/YYYY · In hand {qty(data.closing.qty)} {data.item.unit}</div>
+            </div>
+            <button className="btn sm" onClick={() => setDetailItem({ id: data.item.id, name: data.item.name })}>📜 Open full history modal</button>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="grid">
-              <thead><tr><th>Date</th><th>Voucher</th><th className="tright">In</th><th className="tright">Out</th><th className="tright">Rate</th><th className="tright">Amount</th><th className="tright">Balance qty</th><th className="tright">Balance value</th></tr></thead>
+              <thead><tr><th>Date (DD/MM/YYYY)</th><th>Voucher</th><th>Party (against what)</th><th className="tright">In</th><th className="tright">Out</th><th className="tright">Rate</th><th className="tright">Amount</th><th className="tright">Balance qty (live)</th><th className="tright">Balance value</th><th>Narration</th></tr></thead>
               <tbody>
-                <tr className="row-bold"><td colSpan={6} style={{ color: 'var(--ink-dim)' }}>Opening</td><td className="tright num">{qty(data.opening.qty)}</td><td className="tright num">{inr(data.opening.value)}</td></tr>
+                <tr className="row-bold"><td colSpan={3} style={{ color: 'var(--ink-dim)' }}>Opening</td><td colSpan={4}></td><td className="tright num">{qty(data.opening.qty)}</td><td className="tright num">{inr(data.opening.value)}</td><td></td></tr>
                 {data.rows.map((r, i) => (
-                  <tr key={i}>
+                  <tr key={i} style={{ background: r.direction === 'in' ? 'rgba(142,192,124,0.05)' : 'rgba(224,160,107,0.05)' }}>
                     <td className="num">{dshort(r.date)}</td>
-                    <td className="num">{(r.number || ('#' + r.voucher_no))}</td>
+                    <td className="num">
+                      <button className="btn ghost sm" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => setViewVoucherId(r.voucher_id)} title="View voucher">
+                        {(r.number || ('#' + r.voucher_no))} <span className="badge" style={{ fontSize: 9 }}>{r.class}</span>
+                      </button>
+                    </td>
+                    <td title={r.party_gstin ? `GSTIN: ${r.party_gstin}` : 'Party'} style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <b>{r.party_name || '—'}</b>{r.party_gstin && <div className="faint" style={{ fontSize: 10 }}>{r.party_gstin}</div>}
+                    </td>
                     <td className="tright num">{r.inQty ? qty(r.inQty) : ''}</td>
                     <td className="tright num">{r.outQty ? qty(r.outQty) : ''}</td>
                     <td className="tright num">{inr(r.ratePaise)}</td>
                     <td className="tright num">{inr(r.amountPaise)}</td>
-                    <td className="tright num">{qty(r.balQty)}</td>
+                    <td className="tright num" style={{ fontWeight: 600 }}>{qty(r.balQty)}</td>
                     <td className="tright num">{inr(r.balValue)}</td>
+                    <td className="muted" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.narration}>{r.narration || r.ref || '—'}</td>
                   </tr>
                 ))}
-                <tr className="grand-total"><td colSpan={6}>Closing stock</td><td className="tright num">{qty(data.closing.qty)}</td><td className="tright num">{inr(data.closing.value)}</td></tr>
+                <tr className="grand-total"><td colSpan={3}>Closing stock (dynamically matched)</td><td colSpan={4}></td><td className="tright num">{qty(data.closing.qty)}</td><td className="tright num">{inr(data.closing.value)}</td><td></td></tr>
               </tbody>
+            </table>
+          </div>
+          <div className="faint" style={{ fontSize: 11, marginTop: 8 }}>Stock in hand = opening + all IN - all OUT (weighted avg). Click any voucher to audit. Click 📜 for timeline: when bought, when sold, against which party.</div>
+        </div>
+      )}
+
+      {showFull && fullData && (
+        <div className="card" style={{ borderColor: 'var(--gold)', background: 'var(--gold-soft)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <h3>📜 Full history — {fullData.item.name} — when bought, when sold, against what</h3>
+            <button className="btn ghost sm" onClick={() => setShowFull(false)}>✕ Close</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginBottom: 10 }}>
+            <div><span className="faint" style={{ fontSize: 10 }}>In hand now</span><div style={{ fontWeight: 800 }}>{qty(fullData.summary.inHandQty)} {fullData.item.unit} · {inr(fullData.summary.inHandValue)}</div></div>
+            <div><span className="faint" style={{ fontSize: 10 }}>Total bought</span><div>{qty(fullData.summary.totalBoughtQty)} · {inr(fullData.summary.totalBoughtValue)}</div>{fullData.summary.lastBuy && <div className="faint" style={{ fontSize: 11 }}>Last: {dshort(fullData.summary.lastBuy.date)} vs {fullData.summary.lastBuy.party_name}</div>}</div>
+            <div><span className="faint" style={{ fontSize: 10 }}>Total sold</span><div>{qty(fullData.summary.totalSoldQty)} · {inr(fullData.summary.totalSoldValue)}</div>{fullData.summary.lastSell && <div className="faint" style={{ fontSize: 11 }}>Last: {dshort(fullData.summary.lastSell.date)} to {fullData.summary.lastSell.party_name}</div>}</div>
+            <div><span className="faint" style={{ fontSize: 10 }}>Aging</span><div>{fullData.summary.oldestDate ? `${dshort(fullData.summary.oldestDate)} · ${fullData.summary.daysInStock}d` : '—'}</div></div>
+          </div>
+          <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+            <table className="grid" style={{ fontSize: 11.5 }}>
+              <thead><tr><th>Date DD/MM/YYYY</th><th>Type</th><th>Voucher</th><th>Party</th><th className="tright">In</th><th className="tright">Out</th><th className="tright">Rate</th><th className="tright">Bal Qty</th><th>Narration</th></tr></thead>
+              <tbody>{fullData.movements.map((m,i)=>(
+                <tr key={i}><td>{dshort(m.date)}</td><td><span className="badge">{m.class}</span> {m.direction}</td><td><button className="btn ghost sm" style={{ fontSize: 10 }} onClick={() => setViewVoucherId(m.voucher_id)}>{m.number || '#'+m.voucher_no}</button></td><td>{m.party_name}</td><td className="tright">{m.inQty ? qty(m.inQty) : ''}</td><td className="tright">{m.outQty ? qty(m.outQty) : ''}</td><td className="tright">{inr(m.ratePaise)}</td><td className="tright">{qty(m.balQty)}</td><td className="muted" style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.narration}</td></tr>
+              ))}</tbody>
             </table>
           </div>
         </div>
       )}
+
+      {detailItem && <StockDetailLazy itemId={detailItem.id} itemName={detailItem.name} onClose={() => setDetailItem(null)} onVoucher={(vid) => { setDetailItem(null); setViewVoucherId(vid); }} />}
+      {viewVoucherId && <VoucherModalLazy voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />}
     </div>
   );
 }
+
+function StockDetailLazy(props) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./StockDetail.jsx').then(m => setComp(() => m.StockDetailModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading history…</div></div>;
+  return <Comp {...props} />;
+}
+function VoucherModalLazy({ voucherId, onClose }) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./Voucher.jsx').then(m => setComp(() => m.VoucherModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading voucher…</div></div>;
+  return <Comp voucherId={voucherId} onClose={onClose} />;
+}
+
 
 /* ================= GST ================= */
 function GstView() {

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, useApp } from '../state.jsx';
 import { ItemExcelPanel } from './ItemExcel.jsx';
 import { inr } from '../fmt.js';
+import { StockDetailModal as StockDetailDirect } from './StockDetail.jsx';
+import { VoucherModal as VoucherModalDirect } from './Voucher.jsx';
 
 /* ---------- shared bits ---------- */
 function Err({ e }) { return e ? <div className="errbox">{e}</div> : null; }
@@ -418,6 +420,8 @@ export function ItemsTab() {
   const [q, setQ] = useState('');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
+  const [viewVoucherId, setViewVoucherId] = useState(null);
   const load = async (query = q) => {
     const j = await api('/items' + (query ? '?q=' + encodeURIComponent(query) : ''));
     setRows(j.rows);
@@ -431,32 +435,34 @@ export function ItemsTab() {
   return (
     <div>
       <div className="pagetitle">
-        <div><div className="crumb">Masters · Inventory</div><h1>Stock Items</h1></div>
+        <div><div className="crumb">Masters · Inventory</div><h1>Stock Items — hover/click for buy/sell history</h1></div>
         <button className="btn" onClick={() => { setAdding(!adding); setEditing(null); }}>{adding ? 'Close' : '+ New item'}</button>
       </div>
       {adding && !editing && <ItemForm onSaved={() => { setAdding(false); load(); }} onCancel={() => setAdding(false)} />}
       {editing && <ItemForm edit={editing} onSaved={() => { setEditing(null); load(); }} onCancel={() => setEditing(null)} />}
       <ItemExcelPanel onImported={load} />
-      <div className="card">
+      <div className="card" style={{ borderLeft: '4px solid var(--gold)' }}>
         <div className="frow" style={{ marginBottom: 10 }}>
           <input placeholder="Search item / HSN…" value={q} onChange={(e) => setQ(e.target.value)} onKeyUp={(e) => e.key === 'Enter' && load(q)} />
           <button className="btn ghost" onClick={() => load(q)}>Find</button>
+          <span className="faint" style={{ fontSize: 11, alignSelf: 'center' }}>NEW v1.11.24: Click 📜 to see when bought, when sold, against which party — dynamically matched to stock in hand</span>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table className="grid">
-            <thead><tr><th>Item</th><th>Unit</th><th>HSN</th><th className="tright">GST</th><th className="tright">In stock</th><th className="tright">Stock value</th><th></th></tr></thead>
+            <thead><tr><th>Item (hover/click for history)</th><th>Unit</th><th>HSN</th><th className="tright">GST</th><th className="tright">In stock (live)</th><th className="tright">Stock value</th><th></th></tr></thead>
             <tbody>
               {rows === null && <tr><td colSpan={7} className="empty">Loading…</td></tr>}
               {rows && rows.length === 0 && <tr><td colSpan={7} className="empty">No items. Add your first stock item above.</td></tr>}
               {rows && rows.map((it) => (
-                <tr key={it.id}>
-                  <td><b>{it.name}</b>{it.is_service && <span className="badge">service</span>}</td>
+                <tr key={it.id} style={{ cursor: it.is_service ? 'default' : 'pointer' }} onClick={() => { if (!it.is_service) setDetailItem(it); }}>
+                  <td title={it.is_service ? '' : 'Click to see buy/sell history vs party'}><b>{it.name}</b>{it.is_service && <span className="badge">service</span>} {!it.is_service && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--gold-hi)' }}>📜 history</span>}</td>
                   <td>{it.unit}</td>
                   <td className="num">{it.hsn}</td>
                   <td className="tright num">{it.gst_rate == null ? '—' : it.gst_rate + '%'}</td>
-                  <td className="tright num">{it.is_service ? '—' : (it.stock_qty || 0)}</td>
+                  <td className="tright num" style={{ color: it.stock_qty > 0 ? '#8ec07c' : '#e06b6b', fontWeight: 600 }}>{it.is_service ? '—' : (it.stock_qty || 0)}</td>
                   <td className="tright num">{it.is_service ? '—' : inr(it.stock_value || 0)}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
+                  <td style={{ whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                    {!it.is_service && <button className="btn ghost sm" style={{ borderColor: 'var(--gold)' }} onClick={() => setDetailItem(it)}>📜 History</button>}{' '}
                     <button className="btn ghost sm" onClick={() => { setEditing(it); setAdding(false); }}>Edit</button>{' '}
                     <button className="btn danger sm" onClick={() => del(it)}>✕</button>
                   </td>
@@ -466,9 +472,29 @@ export function ItemsTab() {
           </table>
         </div>
       </div>
+      {detailItem && (
+        <StockDetailLazy itemId={detailItem.id} itemName={detailItem.name} onClose={() => setDetailItem(null)} onVoucher={(vid) => { setDetailItem(null); setViewVoucherId(vid); }} />
+      )}
+      {viewVoucherId && (
+        <VoucherModalLazy voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />
+      )}
     </div>
   );
 }
+
+function StockDetailLazy(props) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./StockDetail.jsx').then(m => setComp(() => m.StockDetailModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading history…</div></div>;
+  return <Comp {...props} />;
+}
+function VoucherModalLazy({ voucherId, onClose }) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./Voucher.jsx').then(m => setComp(() => m.VoucherModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading voucher…</div></div>;
+  return <Comp voucherId={voucherId} onClose={onClose} />;
+}
+
 
 export function Masters({ tab }) {
   return tab === 'items' ? <ItemsTab /> : <LedgersTab />;

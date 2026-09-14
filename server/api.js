@@ -12,6 +12,7 @@ import {
   createCompany, listAccounts, netBalances, createVoucher, updateVoucher, createLedgerAccount,
   deleteVoucher, trialBalance, balanceSheet, profitLoss, dayBook, ledgerReport,
   stockReport, gstSummary, voucherDetail, voucherLog, inventoryState, dashboard,
+  stockItemFullHistory,
 } from './engine.js';
 import { exportKindData, exportKindTemplate, exportKindSample, importKind, parseWorkbook } from './dataio.js';
 import { parseInvoiceWorkbook, importInvoiceExcel } from './invoiceExcel.js';
@@ -722,6 +723,33 @@ api.get('/reports/stock', (req, res) => {
   const p = period(res, req); if (!p) return;
   if (!req.query.item_id) return fail(res, new Error('item_id required.'));
   ok(res, stockReport(p.c, Number(req.query.item_id), p.from, p.to));
+});
+api.get('/reports/stock-detail', (req, res) => {
+  const p = period(res, req); if (!p) return;
+  if (!req.query.item_id) return fail(res, new Error('item_id required.'));
+  try {
+    ok(res, stockItemFullHistory(p.c, Number(req.query.item_id), p.from, p.to));
+  } catch (e) { fail(res, e); }
+});
+api.get('/items/:id/history', (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const id = Number(req.params.id);
+    if (!id) throw new Error('Invalid item id');
+    const from = req.query.from || c.books_begin_from;
+    const to = req.query.to || todayISO();
+    ok(res, stockItemFullHistory(c, id, from, to));
+  } catch (e) { fail(res, e); }
+});
+api.get('/items/:id/stock-detail', (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const id = Number(req.params.id);
+    if (!id) throw new Error('Invalid item id');
+    const from = req.query.from || c.books_begin_from;
+    const to = req.query.to || todayISO();
+    ok(res, stockItemFullHistory(c, id, from, to));
+  } catch (e) { fail(res, e); }
 });
 api.get('/reports/gst', (req, res) => {
   const p = period(res, req); if (!p) return;

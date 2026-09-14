@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../state.jsx';
-import { inr, dshort } from '../fmt.js';
+import { inr, dshort, ddMMyyyy } from '../fmt.js';
 import { checkUpdate, applyUpdate } from '../upd.js';
 
 function fmt(p) {
@@ -24,6 +24,8 @@ export function Gateway() {
   const [upd, setUpd] = useState(null);
   const [updBusy, setUpdBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [detailItem, setDetailItem] = useState(null);
+  const [viewVoucherId, setViewVoucherId] = useState(null);
 
   const loadDash = async () => {
     try {
@@ -154,14 +156,14 @@ export function Gateway() {
           )}
 
           <div style={{ marginTop: 10 }}>
-            <div style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-faint)' }}>Buy vs Sell — last movement per item (with date)</div>
+            <div style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-faint)' }}>Buy vs Sell — click item for full buy/sell vs party history (DD/MM/YYYY)</div>
             <div style={{ maxHeight: 180, overflowY: 'auto', marginTop: 4 }}>
               <table className="grid" style={{ fontSize: 11.5 }}>
-                <thead><tr><th>Item</th><th>Last Buy</th><th>Last Sell</th><th>Age</th></tr></thead>
+                <thead><tr><th>Item (click 📜)</th><th>Last Buy DD/MM/YYYY</th><th>Last Sell DD/MM/YYYY</th><th>Age</th></tr></thead>
                 <tbody>
                   {(d?.buySell || []).slice(0, 8).map(r => (
-                    <tr key={r.id}>
-                      <td>{r.name}</td>
+                    <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setDetailItem({ id: r.id, name: r.name })} title="Click to see when bought, when sold, against which party">
+                      <td><b>{r.name}</b> <span style={{ fontSize: 10, color: 'var(--gold-hi)' }}>📜</span></td>
                       <td>{r.lastBuyDate ? <>{dshort(r.lastBuyDate)} · {fmtQty(r.lastBuyQty)}</> : '—'}</td>
                       <td>{r.lastSellDate ? <>{dshort(r.lastSellDate)} · {fmtQty(r.lastSellQty)}</> : '—'}</td>
                       <td>{r.lastBuyDate && r.lastSellDate ? Math.floor((new Date(r.lastSellDate) - new Date(r.lastBuyDate)) / 86400000) + 'd' : '—'}</td>
@@ -271,8 +273,24 @@ export function Gateway() {
       </div>
 
       <p className="faint" style={{ fontSize: 12, textAlign: 'center', marginTop: 18 }}>
-        Dashboard auto-refreshes on load. Stock dates come from your Opening Stock Excel (date column). Invoice Excel import keeps your format and books + prints PI-200.
+        NEW v1.11.24: Dashboard stock — click any item 📜 to see full buy/sell history vs party (when bought, when sold, against what) — dynamically matched to stock in hand. Multi-sheet Excel import in Sales tab too.
       </p>
+      {detailItem && <StockDetailLazy itemId={detailItem.id} itemName={detailItem.name} onClose={() => setDetailItem(null)} onVoucher={(vid) => { setDetailItem(null); setViewVoucherId(vid); }} />}
+      {viewVoucherId && <VoucherModalLazy voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />}
     </div>
   );
 }
+
+function StockDetailLazy(props) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./StockDetail.jsx').then(m => setComp(() => m.StockDetailModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading history…</div></div>;
+  return <Comp {...props} />;
+}
+function VoucherModalLazy({ voucherId, onClose }) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./Voucher.jsx').then(m => setComp(() => m.VoucherModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading voucher…</div></div>;
+  return <Comp voucherId={voucherId} onClose={onClose} />;
+}
+

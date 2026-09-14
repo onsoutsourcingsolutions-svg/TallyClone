@@ -204,11 +204,13 @@ function isSalesSide(cls) { return cls === 'sales' || cls === 'credit_note'; }
 export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
   const { company, notify } = useApp();
   const kind = partyKindOf(cls);
-  const partyOpts = accounts.filter((a) => a.kind === kind || a.kind === 'Cash' || a.kind === 'Bank');
+  const partyOpts = accounts.filter((a) => a.kind === kind || a.kind === 'Cash' || a.kind === 'Bank' || a.group_code === 'sundry_debtors' || a.group_code === 'sundry_creditors');
   const itemOpts = items.filter((it) => !it.is_service);
   const listP = 'partylist-' + cls + (editing ? editing.id : 'new'), listI = 'itemlist-' + cls + (editing ? editing.id : 'new');
   const partyMap = useMemo(() => { const m = {}; partyOpts.forEach((a) => { m[a.name.toLowerCase()] = a; }); return m; }, [partyOpts]);
   const itemMap = useMemo(() => { const m = {}; itemOpts.forEach((it) => { m[it.name.toLowerCase()] = it; }); return m; }, [itemOpts]);
+  const [detailItem, setDetailItem] = useState(null);
+  const [viewVoucherId, setViewVoucherId] = useState(null);
 
   const initFrom = (v) => {
     if (!v) {
@@ -306,22 +308,27 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
       <datalist id={listP}>{partyOpts.map((a) => <option key={a.id} value={a.name} />)}</datalist>
       <datalist id={listI}>{itemOpts.map((it) => <option key={it.id} value={it.name} />)}</datalist>
       <div className="lines">
-        <div className="lrow2" style={{ color: 'var(--ink-faint)', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-          <div>Stock item *</div><div className="tright">Qty</div><div className="tright">Rate (₹)</div><div></div>
+        <div className="lrow2" style={{ color: 'var(--ink-faint)', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', gridTemplateColumns: '2fr 80px 100px 80px 90px 40px' }}>
+          <div>Stock item * (hover/click 📜 for buy/sell vs party — live stock)</div><div className="tright">In Hand</div><div className="tright">Qty</div><div className="tright">Rate (₹)</div><div className="tright">History</div><div></div>
         </div>
         {rows.map((r, i) => {
           const it = itemMap[r.name.trim().toLowerCase()];
+          const low = it && it.stock_qty != null && Number(r.qty) > 0 && it.stock_qty + 1e-9 < Number(r.qty);
           return (
-            <div className="lrow2" key={i}>
-              <input list={listI} value={r.name} onChange={setRow(i, 'name')} placeholder="Item (auto: GST rate applies)" />
-              <input className="num" value={r.qty} onChange={setRow(i, 'qty')} inputMode="decimal" />
+            <div className="lrow2" key={i} style={{ gridTemplateColumns: '2fr 80px 100px 80px 90px 40px', background: low ? 'rgba(224,160,107,0.12)' : 'transparent' }}>
+              <input list={listI} value={r.name} onChange={setRow(i, 'name')} placeholder="Item — click 📜 for history" title={it ? `In hand: ${it.stock_qty} ${it.unit} — click 📜 for full history` : ''} />
+              <div className="tright num" style={{ fontSize: 11, color: it ? (it.stock_qty > 0 ? '#8ec07c' : '#e06b6b') : 'var(--ink-faint)', alignSelf: 'center' }}>{it ? `${it.stock_qty ?? 0} ${it.unit}` : '—'}</div>
+              <input className="num" value={r.qty} onChange={setRow(i, 'qty')} inputMode="decimal" placeholder={it ? `max ${it.stock_qty}` : 'qty'} />
               <input className="num" value={r.rate} onChange={setRow(i, 'rate')} placeholder={it ? `${it.unit} · GST ${it.gst_rate ?? 0}%` : 'rate'} inputMode="decimal" />
+              <div style={{ alignSelf: 'center' }}>{it ? <button className="btn ghost sm" style={{ fontSize: 10, padding: '2px 6px', borderColor: 'var(--gold)' }} onClick={() => setDetailItem(it)} title="When bought, when sold, against what">📜</button> : ''}</div>
               <button className="minus" onClick={() => setRows(rows.filter((_, j) => j !== i))}>−</button>
             </div>
           );
         })}
         <button className="btn ghost sm" onClick={() => setRows([...rows, { name: '', qty: '1', rate: '' }])}>+ Add item</button>
       </div>
+      {detailItem && <StockDetailLazy itemId={detailItem.id} itemName={detailItem.name} onClose={() => setDetailItem(null)} onVoucher={(vid) => { setDetailItem(null); setViewVoucherId(vid); }} />}
+      {viewVoucherId && <VoucherModalLazy voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />}
       <div className="vfooter">
         <label className="f" style={{ minWidth: 240, margin: 0 }}><span>Narration</span><input value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
         <span className="tot">
@@ -336,6 +343,19 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
     </div>
   );
 }
+function StockDetailLazy(props) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./StockDetail.jsx').then(m => setComp(() => m.StockDetailModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading history…</div></div>;
+  return <Comp {...props} />;
+}
+function VoucherModalLazy({ voucherId, onClose }) {
+  const [Comp, setComp] = useState(null);
+  useEffect(() => { import('./Voucher.jsx').then(m => setComp(() => m.VoucherModal)); }, []);
+  if (!Comp) return <div className="portal"><div className="box">Loading voucher…</div></div>;
+  return <Comp voucherId={voucherId} onClose={onClose} />;
+}
+
 function hintBody(cls) {
   return {
     sales: 'debit party with the invoice total; Sales and output GST credited; stock goes out at weighted-average cost (COGS vs Stock auto entry).',

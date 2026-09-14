@@ -47,7 +47,7 @@ export function InvoiceImportScreen() {
         <div><div className="crumb">Data · Sales Invoice Excel</div><h1>Invoice Excel → Books + Print</h1></div>
       </div>
       <p className="muted" style={{ marginTop: -6, fontSize: 13.5 }}>
-        <b style={{ color: 'var(--gold-hi)' }}>NEW v1.11.23 — Multi-sheet support:</b> If you have <b>ONE Excel file with ALL previous bills in different sheets</b> (each sheet = one bill), just upload it — all sheets will be auto-detected and booked automatically in <b>DD/MM/YYYY chrono order</b>. 
+        <b style={{ color: 'var(--gold-hi)' }}>NEW v1.11.24 — Multi-sheet + Stock live + Hover detail:</b> If you have <b>ONE Excel file with ALL previous bills in different sheets</b> (each sheet = one bill), just upload it — all sheets will be auto-detected and booked automatically in <b>DD/MM/YYYY chrono order</b>, stock matched dynamically to in-hand qty, and you can hover/click any stock item to see when bought, when sold, against which party. 
         Also works with single sheet PI-200 style (<code>PI-200-REFTECH.pdf</code>) — will: <b>1) create party ledger if missing, 2) create stock items if missing, 3) post Sales voucher with CGST/SGST or IGST auto, 4) let you print exact PI-200 layout</b>.
         Your Excel file is never modified. Works with .xlsx, .xls and .csv. Tabular (invoice_no, date DD/MM/YYYY, buyer_name, item_name, qty, rate) also supported.
       </p>
@@ -90,7 +90,7 @@ export function InvoiceImportScreen() {
               ))}</tbody>
             </table>
           </div>
-          <div className="faint" style={{ fontSize: 11, marginTop: 6 }}>Detected {preview.count} bills across all sheets — sorted chrono DD/MM/YYYY. Click Book all to import.</div>
+          <div className="faint" style={{ fontSize: 11, marginTop: 6 }}>Detected {preview.count} bills across all sheets — sorted chrono DD/MM/YYYY — stock matched dynamically. Click Book all to import. Also available in Sales tab.</div>
           <div style={{ marginTop: 12 }}>
             <button className="btn" disabled={busy || !file} onClick={() => doUpload(file, false)}>{busy ? 'Booking…' : `✔ Book all ${preview.count} invoices now`}</button>
           </div>
@@ -164,7 +164,7 @@ export function InvoiceImportScreen() {
             </div>
           )}
           <div style={{ marginTop: 10 }}>
-            <span className="faint" style={{ fontSize: 12 }}>All bills added automatically — check Day Book (sorted DD/MM/YYYY chrono) or Reports → GST.</span>
+            <span className="faint" style={{ fontSize: 12 }}>All bills added automatically — stock dynamically matched — check Day Book (sorted DD/MM/YYYY chrono) or Reports → Stock (click 📜 for buy/sell vs party) or Sales tab (same multi-sheet + hover detail).</span>
           </div>
         </div>
       )}

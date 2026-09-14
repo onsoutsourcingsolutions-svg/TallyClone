@@ -602,13 +602,30 @@ export function ledgerReport(c, accountId, from, to) {
   return { account: a, from, to, opening, closing: bal, rows };
 }
 
+// ---- helper to get party account for a voucher (debtor/creditor) ----
+function voucherPartyFor(voucherId) {
+  // Prefer SundryDebtor / SundryCreditor, then Cash/Bank, then any non-stock, non-duty
+  const row = db.prepare(`
+    SELECT a.id, a.name, a.group_code, a.kind, a.gstin
+    FROM entries e JOIN accounts a ON a.id = e.account_id
+    WHERE e.voucher_id = ? AND e.is_stock = 0 AND a.kind != 'Duty'
+    ORDER BY CASE
+      WHEN a.kind IN ('SundryDebtor','SundryCreditor') THEN 0
+      WHEN a.group_code IN ('sundry_debtors','sundry_creditors') THEN 1
+      WHEN a.group_code IN ('cash_in_hand','bank_accounts') THEN 2
+      ELSE 3 END, e.line_no
+    LIMIT 1
+  `).get(voucherId);
+  return row || null;
+}
+
 export function stockReport(c, itemId, from, to) {
   const item = db.prepare('SELECT * FROM items WHERE id = ? AND company_id = ?').get(itemId, c.id);
   if (!item) throw vErr('Item not found.', 404);
   const opening = inventoryState(itemId, addDaysISO(from, -1));
   let qty = opening.qty, value = opening.value;
   const rows = db.prepare(`
-    SELECT ie.*, v.date, v.class, v.voucher_no FROM item_entries ie
+    SELECT ie.*, v.date, v.class, v.voucher_no, v.number, v.narration, v.ref FROM item_entries ie
     JOIN vouchers v ON v.id = ie.voucher_id
     WHERE ie.item_id = ? AND v.active = 1 AND v.date BETWEEN ? AND ?
     ORDER BY v.date, v.id, ie.line_no`).all(itemId, from, to).map(m => {
@@ -620,8 +637,13 @@ export function stockReport(c, itemId, from, to) {
       qty -= Math.abs(m.qty); value -= outVal;
     }
     if (qty < 1e-9) { qty = 0; value = 0; }
+    const party = voucherPartyFor(m.voucher_id);
     return {
       ...m, date: m.date, class: m.class, voucher_no: m.voucher_no,
+      number: m.number, narration: m.narration, ref: m.ref,
+      party_name: party ? party.name : '',
+      party_id: party ? party.id : null,
+      party_gstin: party ? party.gstin : '',
       inQty: isIn ? m.qty : 0, outQty: isIn ? 0 : m.qty,
       ratePaise: Number(m.rate), amountPaise: Number(m.amount),
       balQty: roundQ(qty), balValue: Math.round(value),
@@ -630,6 +652,117 @@ export function stockReport(c, itemId, from, to) {
   });
   return { item, from, to, opening, rows, closing: { qty: roundQ(qty), value: Math.round(value) } };
 }
+
+// NEW v1.11.24: Full stock history for hover/click detail — when bought, when sold, against what
+export function stockItemFullHistory(c, itemId, from = null, to = null) {
+  const item = db.prepare('SELECT * FROM items WHERE id = ? AND company_id = ?').get(itemId, c.id);
+  if (!item) throw vErr('Item not found.', 404);
+  const fFrom = from || c.books_begin_from;
+  const fTo = to || todayISO();
+  const opening = inventoryState(itemId, addDaysISO(fFrom, -1));
+  const current = inventoryState(itemId);
+  let qty = opening.qty, value = opening.value;
+
+  const rawMoves = db.prepare(`
+    SELECT ie.*, v.date, v.class, v.voucher_no, v.number, v.narration, v.ref, v.id as voucher_id_real
+    FROM item_entries ie
+    JOIN vouchers v ON v.id = ie.voucher_id
+    WHERE ie.item_id = ? AND v.active = 1 AND v.company_id = ?
+    ORDER BY v.date ASC, v.id ASC, ie.line_no ASC
+  `).all(itemId, c.id);
+
+  const movements = [];
+  let totalBoughtQty = 0, totalBoughtValue = 0;
+  let totalSoldQty = 0, totalSoldValue = 0;
+  let lastBuy = null, lastSell = null;
+
+  for (const m of rawMoves) {
+    const isIn = m.direction === 'in';
+    // compute balance after this move for running stock
+    if (isIn) { qty += m.qty; value += Number(m.amount); totalBoughtQty += m.qty; totalBoughtValue += Number(m.amount); }
+    else {
+      const unit = qty > 1e-9 ? value / qty : 0;
+      const outVal = Math.min(Math.abs(m.qty) * unit, value);
+      qty -= Math.abs(m.qty); value -= outVal;
+      totalSoldQty += m.qty; totalSoldValue += Number(m.amount);
+    }
+    if (qty < 1e-9) { qty = 0; value = 0; }
+
+    const party = voucherPartyFor(m.voucher_id);
+    const move = {
+      id: m.id,
+      voucher_id: m.voucher_id,
+      date: m.date,
+      class: m.class,
+      voucher_no: m.voucher_no,
+      number: m.number,
+      narration: m.narration,
+      ref: m.ref,
+      direction: m.direction,
+      qty: m.qty,
+      ratePaise: Number(m.rate),
+      amountPaise: Number(m.amount),
+      balQty: roundQ(qty),
+      balValue: Math.round(value),
+      balRate: qty > 1e-9 ? Math.round(value / qty) : 0,
+      party_name: party ? party.name : '',
+      party_id: party ? party.id : null,
+      party_gstin: party ? party.gstin : '',
+      party_group: party ? party.group_code : '',
+      party_kind: party ? party.kind : '',
+      inQty: isIn ? m.qty : 0,
+      outQty: isIn ? 0 : m.qty,
+    };
+    movements.push(move);
+    if (isIn) lastBuy = move;
+    else lastSell = move;
+  }
+
+  // Filtered for period view
+  const filtered = movements.filter(m => m.date >= fFrom && m.date <= fTo);
+
+  // aging: oldest stock-in still contributing to current balance
+  let oldestDate = null, daysInStock = null;
+  if (current.qty > 1e-9) {
+    const ins = rawMoves.filter(r => r.direction === 'in');
+    let cumIn = 0;
+    let outQtyTotal = rawMoves.filter(r => r.direction === 'out').reduce((s, r) => s + r.qty, 0);
+    for (const ie of ins) {
+      cumIn += ie.qty;
+      if (cumIn > outQtyTotal + 1e-9) { oldestDate = ie.date; break; }
+    }
+    if (oldestDate) {
+      const now = new Date(todayISO());
+      const old = new Date(oldestDate);
+      daysInStock = Math.floor((now - old) / (1000*60*60*24));
+    }
+  }
+
+  return {
+    item,
+    from: fFrom,
+    to: fTo,
+    opening,
+    closing: { qty: roundQ(qty), value: Math.round(value) },
+    current,
+    movements,
+    filtered,
+    summary: {
+      totalBoughtQty: roundQ(totalBoughtQty),
+      totalBoughtValue: Math.round(totalBoughtValue),
+      totalSoldQty: roundQ(totalSoldQty),
+      totalSoldValue: Math.round(totalSoldValue),
+      lastBuy,
+      lastSell,
+      oldestDate,
+      daysInStock,
+      inHandQty: current.qty,
+      inHandValue: current.value,
+      inHandRate: current.rate,
+    }
+  };
+}
+
 
 export function gstSummary(c, from, to) {
   const rows = db.prepare(`
