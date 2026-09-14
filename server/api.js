@@ -804,12 +804,21 @@ const APP_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // (the env overrides exist so the update flow can be tested against a local stand-in)
 // v1.11.31: HOST DIRECTLY VIA GITHUB + jsDelivr CDN for reliability — user stuck on v1.11.27 STILL NOT UPDATE due to raw.githubusercontent.com cache/block
 // Use jsDelivr CDN (fast in India, not blocked) + raw fallback + GitHub API fallback
-const PKG_URLS = [
+// v1.11.37: Force update fallback — 30MB FULL may timeout on slow internet, fallback to 1MB small zip (needs npm install but works)
+// User: NOT WORKING THE UPDATE IS NOT HAPPENING EVEN THE 30MB OPTION
+const PKG_URLS_FULL = [
   process.env.ONS_UPDATE_ZIP_URL,
   'https://cdn.jsdelivr.net/gh/onsoutsourcingsolutions-svg/TallyClone@arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip',
   'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip',
   'https://raw.githubusercontent.com/onsoutsourcingsolutions-svg/TallyClone/arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip'
 ].filter(Boolean);
+const PKG_URLS_SMALL = [
+  'https://cdn.jsdelivr.net/gh/onsoutsourcingsolutions-svg/TallyClone@arena/01a0827e-tallyclone/ONS-Books-PC-Package.zip',
+  'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/ONS-Books-PC-Package.zip',
+  'https://raw.githubusercontent.com/onsoutsourcingsolutions-svg/TallyClone/arena/01a0827e-tallyclone/ONS-Books-PC-Package.zip'
+].filter(Boolean);
+const PKG_URLS = [...PKG_URLS_FULL, ...PKG_URLS_SMALL];
+const PKG_URL = PKG_URLS[0];
 const PKG_URL = PKG_URLS[0];
 const TAG_URLS = [
   process.env.ONS_UPDATE_VERSION_URL,
@@ -907,19 +916,27 @@ api.post('/update/force', async (req, res) => {
   try {
     _updCheckCache = null;
     backupData('pre-force-update');
-    // download latest regardless of version
+    // download latest regardless of version — v1.11.37 FULL then SMALL fallback with detailed logs
     let buf = null;
     let lastErr = null;
+    let tried = [];
     for (const pkgBase of PKG_URLS) {
       try {
-        const r = await fetch(pkgBase + '?t=' + Date.now(), { signal: AbortSignal.timeout(120000), headers: { accept: 'application/zip', 'user-agent': 'ONS-Books-updater' } });
-        if (!r.ok) { lastErr = new Error('HTTP '+r.status+' from '+pkgBase); continue; }
+        const isFull = pkgBase.includes('full');
+        console.log(`[force-update] trying ${isFull?'FULL 30MB':'SMALL 1MB'} from ${pkgBase}`);
+        const r = await fetch(pkgBase + '?t=' + Date.now() + '_' + Math.random().toString(36).slice(2), { signal: AbortSignal.timeout(isFull ? 180000 : 60000), headers: { accept: 'application/zip', 'user-agent': 'ONS-Books-updater', 'cache-control': 'no-cache' } });
+        if (!r.ok) { lastErr = new Error(`HTTP ${r.status} from ${pkgBase}`); tried.push(`${pkgBase} HTTP ${r.status}`); continue; }
         const b = Buffer.from(await r.arrayBuffer());
-        if (b.length < 500 || b.readUInt32LE(0) !== 0x04034b50) { lastErr = new Error('Invalid zip '+pkgBase); continue; }
-        buf = b; break;
-      } catch (e) { lastErr = e; }
+        if (b.length < 500 || b.readUInt32LE(0) !== 0x04034b50) { lastErr = new Error(`Invalid zip ${pkgBase} size ${b.length}`); tried.push(`${pkgBase} invalid`); continue; }
+        buf = b;
+        console.log(`[force-update] SUCCESS ${(b.length/1024/1024).toFixed(2)} MB from ${pkgBase}`);
+        break;
+      } catch (e) { lastErr = e; tried.push(`${pkgBase} ${e.message}`); console.warn('[force-update] failed', pkgBase, e.message); }
     }
-    if (!buf) throw lastErr || new Error('Download failed');
+    if (!buf) {
+      console.error('[force-update] ALL failed', tried.join(' | '));
+      throw new Error(`Force download failed from all mirrors. Last: ${lastErr?.message}. Tried: ${tried.slice(0,3).join(' | ')}. Check internet/firewall. Try manual small zip if needed.`);
+    }
     const stage = path.join(APP_ROOT, '_update_stage');
     fs.rmSync(stage, { recursive: true, force: true });
     const files = extractZip(buf, stage, { skip: UPDATE_SKIP });
@@ -999,28 +1016,34 @@ api.post('/update/apply', async (req, res) => {
     if (!ls) return fail(res, new Error('Could not reach the update server. Check the internet and try again.'));
     if (!cur || !newerThan(ls, cur)) return fail(res, new Error('Already on the newest build (' + BUILD_TAG + ') - nothing to install.'));
 
-    // 2. download the package — v1.11.31 try multiple CDNs (jsDelivr + raw) for reliability
+    // 2. download the package — v1.11.37 try FULL then SMALL fallback, better logging for NOT WORKING 30MB
     let buf = null;
     let lastDlErr = null;
+    let tried = [];
     for (const pkgBase of PKG_URLS) {
       try {
-        console.log('[update] trying download from', pkgBase);
-        const r = await fetch(pkgBase + '?t=' + Date.now(), {
-          signal: AbortSignal.timeout(120000),
-          headers: { accept: 'application/zip, */*', 'user-agent': 'ONS-Books-updater', 'cache-control': 'no-cache' },
+        const isFull = pkgBase.includes('full');
+        console.log(`[update] trying download ${isFull?'FULL 30MB':'SMALL 1MB'} from`, pkgBase);
+        const r = await fetch(pkgBase + '?t=' + Date.now() + '_' + Math.random().toString(36).slice(2), {
+          signal: AbortSignal.timeout(isFull ? 180000 : 60000),
+          headers: { accept: 'application/zip, */*', 'user-agent': 'ONS-Books-updater', 'cache-control': 'no-cache, no-store' },
         });
-        if (!r.ok) { lastDlErr = new Error('Download failed from ' + pkgBase + ' HTTP ' + r.status); continue; }
+        if (!r.ok) { lastDlErr = new Error(`Download failed from ${pkgBase} HTTP ${r.status}`); tried.push(`${pkgBase} HTTP ${r.status}`); continue; }
         const b = Buffer.from(await r.arrayBuffer());
-        if (b.length < 500 || b.readUInt32LE(0) !== 0x04034b50) { lastDlErr = new Error('Invalid zip from ' + pkgBase); continue; }
+        if (b.length < 500 || b.readUInt32LE(0) !== 0x04034b50) { lastDlErr = new Error(`Invalid zip from ${pkgBase} size ${b.length}`); tried.push(`${pkgBase} invalid ${b.length}`); continue; }
         buf = b;
-        console.log('[update] downloaded', (b.length/1024/1024).toFixed(1), 'MB from', pkgBase);
+        console.log(`[update] SUCCESS downloaded ${(b.length/1024/1024).toFixed(2)} MB from ${pkgBase} — ${isFull?'FULL includes node_modules, no install needed':'SMALL needs npm install'}`);
         break;
       } catch (e) {
         lastDlErr = e;
+        tried.push(`${pkgBase} err ${e.message}`);
         console.warn('[update] download failed from', pkgBase, e.message);
       }
     }
-    if (!buf) throw lastDlErr || new Error('Download failed from all mirrors. Check internet and try again.');
+    if (!buf) {
+      console.error('[update] ALL downloads failed:', tried.join(' | '));
+      throw new Error(`Download failed from all mirrors (${tried.length} tried). Last: ${lastDlErr?.message}. Tried: ${tried.slice(0,3).join(' | ')}. Check internet, firewall, antivirus. Try SMALL zip via browser: https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/ONS-Books-PC-Package.zip`);
+    }
 
 
     // 3. unpack into a staging folder, skipping anything protected
