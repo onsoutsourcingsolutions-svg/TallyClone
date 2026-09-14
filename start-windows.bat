@@ -63,17 +63,48 @@ if errorlevel 1 (
   )
 )
 
-rem --- 6. Start server, open browser once it really answers ---
+rem --- 6. Start server, open browser once it really answers — v1.11.26 AUTO-RESTART NO MANUAL CLOSE ---
+:serverloop
 echo.
-echo  [step 3/3] Starting server...
+echo  [step 3/3] Starting server... (auto-restart enabled — NO need to close manually on update)
 echo.
 start "" /b node scripts\open-browser.js
 call npm start
+set EXITCODE=%errorlevel%
+echo.
+echo  Server stopped at %date% %time% with code %EXITCODE% >> server.log
+echo  Server stopped with code %EXITCODE% — checking if it was an auto-update restart...
+
+rem If update-restart.log exists and was updated in last 2 minutes, it was an update — auto-restart WITHOUT pause
+if exist "update-restart.log" (
+  for /f "delims=" %%a in ('powershell -Command "(Get-Date) - (Get-Item 'update-restart.log').LastWriteTime | Select-Object -ExpandProperty TotalSeconds" 2^>nul') do set AGE=%%a
+  if not defined AGE set AGE=9999
+  rem powershell may fail on old Windows — fallback: just check if _apply-restart.bat is gone but log exists
+  echo   update-restart.log age ~%AGE% sec
+  echo   If age ^< 120 sec, this was an auto-update — restarting automatically...
+  rem Use simple check: if log exists and _apply-restart.bat does NOT exist (deleted by restart bat), auto-restart
+  if not exist "_apply-restart.bat" (
+    echo   Detected auto-update restart — new server already running in background — restarting this window in 3 sec (NO manual close needed)...
+    timeout /t 3 /nobreak >nul
+    goto serverloop
+  )
+  rem Also if age < 120, auto-restart
+  for /f "tokens=1 delims=." %%b in ("%AGE%") do set AGEINT=%%b
+  if %AGEINT% LSS 120 (
+    echo   Recent update detected — auto-restarting...
+    timeout /t 3 /nobreak >nul
+    goto serverloop
+  )
+)
+
+rem Normal stop (not update) — show message and pause
 echo.
 echo  The server stopped.
+echo  If you stopped it manually, you can close this window.
+echo  If it stopped due to an update, it should have auto-restarted above — if not, double-click START_ME.bat again.
 echo.
 pause
-exit /b 0
+exit /b %EXITCODE%
 
 :nonode
 echo.

@@ -805,7 +805,8 @@ async function remoteBuildTag() {
 
 let _updCheckCache = null; // { at, body }
 api.get('/update/check', async (req, res) => {
-  if (_updCheckCache && Date.now() - _updCheckCache.at < 60000) return ok(res, _updCheckCache.body);
+  // v1.11.26: reduced cache to 10 sec for live updates — user complained 1.11.25 NOT PUSHED due to 60 sec cache
+  if (_updCheckCache && Date.now() - _updCheckCache.at < 10000) return ok(res, _updCheckCache.body);
   const cur = semverOf(BUILD_TAG);
   let body;
   try {
@@ -828,7 +829,8 @@ api.get('/ping', (req, res) => ok(res, {}));
 
 api.post('/update/apply', async (req, res) => {
   try {
-    // 0. backup data before any update (auto backup)
+    // 0. backup data before any update (auto backup) + clear update check cache for live update
+    _updCheckCache = null;
     backupData('pre-update');
 
     // 1. confirm a genuinely newer build is published
@@ -902,16 +904,25 @@ api.post('/update/apply', async (req, res) => {
           const batContent = [
             '@echo off',
             'setlocal',
-            'rem ONS Books Auto-restart after update — v1.11.21 — NO MANUAL CLOSE NEEDED',
+            'rem ONS Books Auto-restart after update — v1.11.26 — NO MANUAL CLOSE NEEDED — LIVE UPDATE',
             'rem FIX for ADITYA MISHRA space path — %~dp0. avoids trailing backslash escaping quote',
             'cd /d "%~dp0."',
-            'echo [%date% %time%] Restarting after update... >> update-restart.log',
+            'echo [%date% %time%] === AUTO-UPDATE RESTART START === >> update-restart.log',
+            'echo [%date% %time%] Restarting after update to %BUILD_TAG% >> update-restart.log'.replace('%BUILD_TAG%', latest || 'unknown'),
             'timeout /t 4 /nobreak >nul',
+            'echo [%date% %time%] Killing old server on :8080... >> update-restart.log',
             'for /f "tokens=5" %%a in (\'netstat -aon ^| findstr :8080 ^| findstr LISTENING\') do taskkill /f /pid %%a >nul 2>nul',
-            'timeout /t 1 /nobreak >nul',
-            'start "" /b node "server\\run.js" >> server.log 2>&1',
-            'echo [%date% %time%] New server started >> update-restart.log',
             'timeout /t 2 /nobreak >nul',
+            'echo [%date% %time%] Starting new server... >> update-restart.log',
+            'rem Try to rebuild quickly if npm available (ensures new dist shows) — fallback to node if build fails',
+            'if exist "node_modules" (',
+            '  start "" /b cmd /c "npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
+            ') else (',
+            '  start "" /b node "server\\run.js" >> server.log 2>&1',
+            ')',
+            'echo [%date% %time%] New server start command issued — will be up in 3-5 sec >> update-restart.log',
+            'echo [%date% %time%] New build should be live — NO manual close needed — browser will auto-reload >> update-restart.log',
+            'timeout /t 3 /nobreak >nul',
             'del "%~f0" >nul 2>nul',
             'endlocal',
             'exit /b 0'
