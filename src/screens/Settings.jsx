@@ -146,32 +146,53 @@ export function SettingsScreen() {
         </div>
       </div>
       <div className="card" style={{ borderLeft: '4px solid var(--gold)' }}>
-        <h3>🔑 GST auto-fill — like Tally (no captcha)</h3>
+        <h3>🔑 GST auto-fill — like Tally (no captcha) — v1.11.19 FIXED</h3>
         <p className="muted" style={{ margin: '0 0 10px', fontSize: 13 }}>
           Tally is a registered GSP (you saw the list: Tally, Zoho, Masters India, ClearTax) so it fetches GSTIN without captcha via official GSTN API.
-          You can get same automatic fill here by adding a free GSP API key — 100% automatic, no captcha.
+          You can get same automatic fill here by adding a free GSP API key — 100% automatic, no captcha. <b>v1.11.19 now tries gstinapi.in + gstinapi.com + free APIs, shows exact error if key invalid/credits exhausted.</b>
         </p>
         <div className="frow">
           <label className="f"><span>Provider (for Tally-like auto-fill)</span>
             <select value={f.gst_api_provider} onChange={set('gst_api_provider')}>
-              <option value="auto">Auto — try free APIs first (no key)</option>
-              <option value="gstinapi">gstinapi.in — 100 free, no card</option>
+              <option value="auto">Auto — tries gstinapi.in, gstinapi.com, free APIs</option>
+              <option value="gstinapi">gstinapi.in — 100 free/month, no card (recommended)</option>
               <option value="appyflow">appyflow.in — 50 free</option>
               <option value="gstincheck">gstincheck.co.in — 20 free</option>
             </select>
           </label>
-          <label className="f"><span>API Key (optional — for auto-fill without captcha)</span>
-            <input value={f.gst_api_key} onChange={set('gst_api_key')} placeholder="gak_... or key_secret" style={{ fontFamily: 'var(--mono)', fontSize: 12 }} />
+          <label className="f"><span>API Key (for auto-fill without captcha)</span>
+            <input value={f.gst_api_key} onChange={set('gst_api_key')} placeholder="gak_... (from gstinapi.in) or key_secret" style={{ fontFamily: 'var(--mono)', fontSize: 12 }} />
           </label>
         </div>
         <div className="faint" style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.6 }}>
-          <b>How to get free key (Tally-like):</b><br/>
-          1. <b>gstinapi.in</b> → Register → API Keys → Copy <code>gak_...</code> → paste → Save → Now Verify auto-fills without captcha<br/>
-          2. <b>appyflow.in/verify-gst</b> → Fill form → key_secret → paste<br/>
-          Without key: app tries free public APIs + GST portal captcha. If captcha fails, offline (state+PAN) still valid.
+          <b>How to get free key (Tally-like, 2 min):</b><br/>
+          1. Go <b>https://www.gstinapi.in/register</b> → Sign up (email, no card) → Dashboard → <b>API Keys</b> → Copy key starting <code>gak_</code> → paste above → Save<br/>
+          2. Alternative: <b>https://www.gstinapi.com</b> → Register → API Key → paste<br/>
+          3. Click <b>Save GST API settings</b> → then go to <b>Masters → Ledgers → New ledger</b> → type GSTIN → <b>Verify & Auto-fill</b> → name/address/PAN auto-fills instantly (no captcha).<br/>
+          <b>If it still says "Valid offline":</b> Check key is full (starts gak_), not expired, credits left (100/month free). Click Test below.<br/>
+          Without key: app tries free public APIs + GST portal captcha. Offline (state+PAN) always works.
         </div>
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn" onClick={save}>Save GST API settings</button>
+          <button className="btn ghost" onClick={async () => {
+            const testGstin = prompt('Enter a GSTIN to test your API key (e.g. 27AAAPL1234C1ZP or any real GSTIN):', '27AAAPL1234C1ZP');
+            if (!testGstin) return;
+            setErr('');
+            try {
+              notify('Testing API key...');
+              const j = await api('/gst/verify?gstin=' + encodeURIComponent(testGstin.trim()));
+              if (j.api_error || j.error) {
+                setErr(j.error || j.message);
+                notify(j.error || 'API key test failed');
+              } else if (j.verified && j.details) {
+                notify(`✓ API key works! Fetched via ${j.details.source}: ${j.details.trade_name || j.details.legal_name}`);
+              } else {
+                setErr(j.message || 'No live data — check key, credits, internet');
+                notify('Test returned offline only');
+              }
+            } catch (e) { setErr(e.message); }
+          }}>🧪 Test API key with GSTIN</button>
+          {saved && <span className="badge gold" style={{ marginLeft: 10 }}>saved</span>}
         </div>
       </div>
       <div className="card">

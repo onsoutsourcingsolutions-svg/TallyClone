@@ -1,6 +1,5 @@
-// server/gst.js — GSTIN verification & auto-pull with live captcha flow
-// Validates GSTIN locally and fetches taxpayer details from official GST portal via captcha
-// No paid key required — uses https://services.gst.gov.in/services/captcha + taxpayerDetails
+// server/gst.js — GSTIN verification & auto-pull — v1.11.19 fixed
+// Validates GSTIN locally and fetches taxpayer details via GSP API (Tally-like, no captcha) + official portal captcha fallback
 
 const STATE_CODES = {
   '01': 'Jammu and Kashmir', '02': 'Himachal Pradesh', '03': 'Punjab', '04': 'Chandigarh',
@@ -27,7 +26,6 @@ function valueToChar(v) {
   if (v < 10) return String(v);
   return String.fromCharCode(v + 55);
 }
-
 function isValidChecksum(gstin) {
   if (!gstin || gstin.length !== 15) return false;
   const g = gstin.toUpperCase();
@@ -69,18 +67,15 @@ export function validateGSTIN(gstin) {
   };
 }
 
-// cache for verified GSTINs
+// cache
 const _cache = new Map();
 const CACHE_TTL = 24 * 60 * 60 * 1000;
-
-// captcha session store: captcha_id -> { cookie, at }
 const _captchaStore = new Map();
-const CAPTCHA_TTL = 5 * 60 * 1000; // 5 min
+const CAPTCHA_TTL = 5 * 60 * 1000;
 
 function genId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
-
 function cleanupCaptcha() {
   const now = Date.now();
   for (const [k, v] of _captchaStore.entries()) {
@@ -88,7 +83,7 @@ function cleanupCaptcha() {
   }
 }
 
-async function fetchWithTimeout(url, opts = {}, ms = 10000) {
+async function fetchWithTimeout(url, opts = {}, ms = 12000) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), ms);
   try {
@@ -99,49 +94,6 @@ async function fetchWithTimeout(url, opts = {}, ms = 10000) {
   }
 }
 
-// Fallback using Node https for environments where fetch fails (e.g., GST portal blocking)
-async function fetchWithHttps(url) {
-  const https = await import('node:https');
-  const http = await import('node:http');
-  return new Promise((resolve, reject) => {
-    const lib = url.startsWith('https') ? https : http;
-    const req = lib.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'image/*,*/*',
-        'Referer': 'https://services.gst.gov.in/services/searchtp'
-      },
-      timeout: 15000
-    }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => {
-        const buf = Buffer.concat(chunks);
-        // Mock fetch-like response
-        resolve({
-          ok: res.statusCode >= 200 && res.statusCode < 300,
-          status: res.statusCode,
-          headers: {
-            get: (name) => {
-              const n = name.toLowerCase();
-              if (n === 'content-type') return res.headers['content-type'] || '';
-              if (n === 'set-cookie') return res.headers['set-cookie']?.join('; ') || '';
-              return res.headers[n] || null;
-            },
-            getSetCookie: () => res.headers['set-cookie'] || []
-          },
-          arrayBuffer: async () => buf
-        });
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('HTTPS timeout'));
-    });
-  });
-}
-
 const GST_CAPTCHA_URL = 'https://services.gst.gov.in/services/captcha?rnd=';
 const GST_DETAILS_URL = 'https://services.gst.gov.in/services/api/search/taxpayerDetails';
 const INVALID_GST_CODE = 'SWEB_9035';
@@ -149,135 +101,59 @@ const INVALID_CAPTCHA_CODE = 'SWEB_9000';
 
 export async function getGSTCaptcha() {
   cleanupCaptcha();
-  
-  // Try multiple methods to get captcha
-  const methods = [
-    // Method 1: Direct fetch with standard headers
-    async () => {
-      const url = GST_CAPTCHA_URL + Math.random();
-      const r = await fetchWithTimeout(url, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Referer': 'https://services.gst.gov.in/services/searchtp',
-          'Origin': 'https://services.gst.gov.in'
-        }
-      }, 15000);
-      return r;
-    },
-    // Method 2: Fetch search page first to get session, then captcha
-    async () => {
-      await fetchWithTimeout('https://services.gst.gov.in/services/searchtp', {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      }, 8000).catch(() => {});
-      const url = GST_CAPTCHA_URL + Math.random();
-      const r = await fetchWithTimeout(url, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'image/*',
-          'Referer': 'https://services.gst.gov.in/services/searchtp'
-        }
-      }, 15000);
-      return r;
-    },
-    // Method 3: Try with minimal headers
-    async () => {
-      const url = GST_CAPTCHA_URL + Math.random();
-      const r = await fetchWithTimeout(url, { method: 'GET' }, 15000);
-      return r;
-    },
-    // Method 4: Try with Node https directly (bypasses fetch issues)
-    async () => {
-      const url = GST_CAPTCHA_URL + Math.random();
-      const r = await fetchWithHttps(url);
-      return r;
-    }
-  ];
-
-  let lastError = null;
-  for (let i = 0; i < methods.length; i++) {
+  const url = GST_CAPTCHA_URL + Math.random();
+  try {
+    const r = await fetchWithTimeout(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/*,*/*',
+        'Referer': 'https://services.gst.gov.in/services/searchtp',
+        'Origin': 'https://services.gst.gov.in'
+      }
+    }, 15000);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length < 100) throw new Error('Captcha too small');
+    let cookie = '';
     try {
-      const r = await methods[i]();
-      if (!r.ok) {
-        lastError = new Error(`GST portal HTTP ${r.status} (method ${i+1})`);
-        continue;
+      const scs = r.headers.getSetCookie ? r.headers.getSetCookie() : [];
+      for (const sc of scs) {
+        const m = /CaptchaCookie=([^;]+)/i.exec(sc);
+        if (m) { cookie = m[1]; break; }
       }
-      const buf = Buffer.from(await r.arrayBuffer());
-      if (buf.length < 100) {
-        lastError = new Error(`GST captcha too small (${buf.length} bytes) - portal blocking (method ${i+1})`);
-        continue;
+      if (!cookie) {
+        const raw = r.headers.get('set-cookie') || '';
+        const m = /CaptchaCookie=([^;]+)/i.exec(raw);
+        if (m) cookie = m[1];
       }
-
-      // parse CaptchaCookie
-      let cookie = '';
-      try {
-        const setCookies = r.headers.getSetCookie ? r.headers.getSetCookie() : [r.headers.get('set-cookie') || ''];
-        for (const sc of setCookies) {
-          if (!sc) continue;
-          const parts = sc.split(';');
-          for (const p of parts) {
-            const kv = p.trim().split('=');
-            if (kv[0] === 'CaptchaCookie' && kv[1]) {
-              cookie = kv[1];
-              break;
-            }
-          }
-          if (cookie) break;
-        }
-        if (!cookie) {
-          const raw = r.headers.get('set-cookie') || '';
-          const m = /CaptchaCookie=([^;]+)/i.exec(raw);
-          if (m) cookie = m[1];
-        }
-      } catch (_) {}
-
-      const b64 = buf.toString('base64');
-      const mime = r.headers.get('content-type') || 'image/png';
-      const id = genId();
-      _captchaStore.set(id, { cookie, at: Date.now() });
-
-      return {
-        captcha_id: id,
-        captcha_cookie: cookie,
-        image_base64: b64,
-        mime,
-        data_uri: `data:${mime};base64,${b64}`,
-        expires_in: CAPTCHA_TTL,
-        method: i+1
-      };
-    } catch (e) {
-      lastError = e;
-      console.warn(`GST captcha method ${i+1} failed:`, e.message);
-      continue;
-    }
+    } catch (_) {}
+    const b64 = buf.toString('base64');
+    const mime = r.headers.get('content-type') || 'image/png';
+    const id = genId();
+    _captchaStore.set(id, { cookie, at: Date.now() });
+    return {
+      captcha_id: id,
+      captcha_cookie: cookie,
+      image_base64: b64,
+      mime,
+      data_uri: `data:${mime};base64,${b64}`,
+      expires_in: CAPTCHA_TTL
+    };
+  } catch (e) {
+    throw new Error(`Could not reach GST portal: ${e.message}. Offline validation still works. Check https://services.gst.gov.in/services/searchtp`);
   }
-
-  // All methods failed - provide helpful error
-  throw new Error(
-    `Could not reach GST portal for captcha after ${methods.length} attempts. ` +
-    `Last error: ${lastError?.message || 'unknown'}. ` +
-    `This can happen if: (1) Internet is down, (2) GST portal is blocking, ` +
-    `(3) Firewall/antivirus blocking. Try: check internet, disable VPN, ` +
-    `or use offline GSTIN validation (still works for saving ledgers). ` +
-    `You can also manually check at https://services.gst.gov.in/services/searchtp`
-  );
 }
 
 function parseGSTResponse(j) {
   if (!j) return null;
-  // j may be the taxpayer object directly
   const pradr = j.pradr || {};
   const addrParts = [
     pradr.addr1, pradr.addr2, pradr.addrBnm, pradr.addrSt, pradr.addrLoc,
     pradr.dst, pradr.stcd ? STATE_CODES[pradr.stcd] || pradr.stcd : '',
     pradr.pncd
   ].filter(Boolean);
-  // Build address string
   const address = pradr.adr || addrParts.join(', ') || [j.pradr?.adr, j.adadr?.[0]?.adr].filter(Boolean).join(' | ');
-
   return {
     legal_name: j.lgnm || '',
     trade_name: j.tradeNam || j.tradeName || j.lgnm || '',
@@ -297,21 +173,17 @@ function parseGSTResponse(j) {
 export async function verifyGSTINWithCaptcha(gstin, captcha, opts = {}) {
   const v = validateGSTIN(gstin);
   if (!v.valid) return { ...v, verified: false, details: null };
-
   let cookie = opts.captcha_cookie || '';
   if (!cookie && opts.captcha_id) {
     const rec = _captchaStore.get(opts.captcha_id);
-    if (!rec) throw new Error('Captcha expired or invalid — please click Refresh Captcha and try again.');
+    if (!rec) throw new Error('Captcha expired — Refresh and try again.');
     cookie = rec.cookie;
   }
-  if (!cookie) throw new Error('Captcha session missing — get a new captcha first.');
-
-  // Check cache first
+  if (!cookie) throw new Error('Captcha session missing — get new captcha first.');
   const cached = _cache.get(v.gstin);
   if (cached && Date.now() - cached.at < CACHE_TTL) {
     return { ...v, verified: !!cached.data, details: cached.data, cached: true };
   }
-
   let r;
   try {
     r = await fetchWithTimeout(GST_DETAILS_URL, {
@@ -319,7 +191,7 @@ export async function verifyGSTINWithCaptcha(gstin, captcha, opts = {}) {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0',
         'Origin': 'https://services.gst.gov.in',
         'Referer': 'https://services.gst.gov.in/services/searchtp',
         'Cookie': `CaptchaCookie=${cookie}`
@@ -327,36 +199,27 @@ export async function verifyGSTINWithCaptcha(gstin, captcha, opts = {}) {
       body: JSON.stringify({ gstin: v.gstin, captcha: String(captcha).trim() })
     }, 15000);
   } catch (e) {
-    throw new Error('Could not reach GST portal — check internet. ' + e.message);
+    throw new Error('GST portal unreachable: ' + e.message);
   }
-
   const text = await r.text();
   let j;
   try { j = JSON.parse(text); } catch (_) { j = null; }
-
   if (!r.ok) {
-    // GST portal returns 200 even for errors, but sometimes 400
     if (j && j.errorCode) {
-      if (j.errorCode === INVALID_CAPTCHA_CODE) throw new Error('Invalid captcha — please re-enter the 6 characters shown in image and try again.');
-      if (j.errorCode === INVALID_GST_CODE) throw new Error('GSTIN not found on GST portal — check number.');
-      throw new Error(j.message || `GST portal error ${j.errorCode}`);
+      if (j.errorCode === INVALID_CAPTCHA_CODE) throw new Error('Invalid captcha — re-enter 6 chars.');
+      if (j.errorCode === INVALID_GST_CODE) throw new Error('GSTIN not found on portal.');
+      throw new Error(j.message || `GST error ${j.errorCode}`);
     }
-    throw new Error(`GST portal returned HTTP ${r.status}: ${text.slice(0, 300)}`);
+    throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
   }
-
-  if (!j) throw new Error('GST portal returned unreadable response');
-
+  if (!j) throw new Error('Unreadable response');
   if (j.errorCode) {
-    if (j.errorCode === INVALID_CAPTCHA_CODE) throw new Error('Invalid captcha — the image text did not match. Click Refresh Captcha and try again.');
-    if (j.errorCode === INVALID_GST_CODE) throw new Error(`GSTIN ${v.gstin} not found on GST portal.`);
+    if (j.errorCode === INVALID_CAPTCHA_CODE) throw new Error('Invalid captcha — refresh and try again.');
+    if (j.errorCode === INVALID_GST_CODE) throw new Error(`GSTIN ${v.gstin} not found.`);
     throw new Error(j.message || `GST error ${j.errorCode}`);
   }
-
-  // j may have message null and data inside, or directly taxpayer object
-  // According to earlier code, successful response has lgnm etc.
   const details = parseGSTResponse(j);
   if (!details || (!details.legal_name && !details.trade_name)) {
-    // Try alternative field nesting
     if (j.data) {
       const d2 = parseGSTResponse(j.data);
       if (d2 && (d2.legal_name || d2.trade_name)) {
@@ -365,204 +228,240 @@ export async function verifyGSTINWithCaptcha(gstin, captcha, opts = {}) {
         return { ...v, verified: true, details: d2, cached: false };
       }
     }
-    throw new Error('GST portal returned no taxpayer data — try again or check GSTIN.');
+    throw new Error('No taxpayer data returned — try again.');
   }
-
   _cache.set(v.gstin, { at: Date.now(), data: details });
   if (opts.captcha_id) _captchaStore.delete(opts.captcha_id);
-
   return { ...v, verified: true, details, cached: false };
 }
 
-// Fallback attempt using free public APIs (no captcha) — best effort
-// These are tried before captcha flow, and also when captcha fails
-// These give automatic fill like Tally (Tally is a GSP with official API access)
-async function fetchGSTDetailsFallback(gstin, opts = {}) {
-  // Get custom API keys from env or from Settings (for Tally-like auto-fill without captcha)
-  const customKeys = {
-    gstinapi: opts.apiKey || process.env.GSTINAPI_KEY || process.env.GST_API_KEY || '',
-    appyflow: opts.provider === 'appyflow' ? opts.apiKey : (process.env.APPYFLOW_KEY || ''),
-    gstincheck: opts.provider === 'gstincheck' ? opts.apiKey : '',
-    provider: opts.provider || 'auto'
-  };
-  // If provider is specific, only use that key
-  if (customKeys.provider !== 'auto' && opts.apiKey) {
-    if (customKeys.provider === 'gstinapi') customKeys.gstinapi = opts.apiKey;
-    if (customKeys.provider === 'appyflow') customKeys.appyflow = opts.apiKey;
-    if (customKeys.provider === 'gstincheck') customKeys.gstincheck = opts.apiKey;
+// ---------- NEW: Robust GSP API fetcher (Tally-like, no captcha) ----------
+async function tryGSTINAPI(gstin, apiKey) {
+  if (!apiKey) return null;
+  const key = String(apiKey).trim();
+  if (key.length < 10) throw new Error('API key too short — copy full gak_... from gstinapi.in dashboard');
+
+  // Endpoints to try — gstinapi.in and gstinapi.com are different services
+  const endpoints = [
+    { url: `https://www.gstinapi.in/v1/gstin/${gstin}`, host: 'www.gstinapi.in' },
+    { url: `https://gstinapi.in/v1/gstin/${gstin}`, host: 'gstinapi.in' },
+    { url: `https://www.gstinapi.com/api/get-taxpayer-info/${gstin}`, host: 'gstinapi.com' },
+    { url: `https://gstinapi.com/api/get-taxpayer-info/${gstin}`, host: 'gstinapi.com' },
+  ];
+
+  let lastErr = null;
+  for (const ep of endpoints) {
+    try {
+      console.log(`[GST] Trying ${ep.host} for ${gstin}`);
+      const r = await fetchWithTimeout(ep.url, {
+        method: 'GET',
+        headers: {
+          'x-api-key': key,
+          'Accept': 'application/json',
+          'User-Agent': 'ONS-Books/1.0'
+        }
+      }, 10000);
+
+      const text = await r.text();
+      let j;
+      try { j = JSON.parse(text); } catch (_) { j = null; }
+
+      if (r.status === 401) {
+        throw new Error(`Invalid API key for ${ep.host} — check Settings → GST API key. Make sure you copied gak_... correctly from ${ep.host}. (HTTP 401)`);
+      }
+      if (r.status === 402) {
+        throw new Error(`API credits exhausted for ${ep.host} — free 100/month used. Recharge or wait next month. (HTTP 402)`);
+      }
+      if (r.status === 404) {
+        // GSTIN not found is valid response, not key error
+        if (j && j.message && /not found/i.test(j.message)) {
+          throw new Error(`GSTIN ${gstin} not found on GST database (checked via ${ep.host}).`);
+        }
+        lastErr = new Error(`GSTIN not found on ${ep.host}`);
+        continue; // try next endpoint
+      }
+      if (r.status === 429) {
+        throw new Error(`Rate limit hit for ${ep.host} — wait 1 min and try again (HTTP 429)`);
+      }
+      if (!r.ok) {
+        lastErr = new Error(`${ep.host} HTTP ${r.status}: ${text.slice(0, 200)}`);
+        continue;
+      }
+
+      // Parse successful response — handle both gstinapi.in and gstinapi.com schemas
+      if (!j) {
+        lastErr = new Error(`${ep.host} returned non-JSON`);
+        continue;
+      }
+
+      // gstinapi.in schema: { gstin, legal_name, trade_name, status, taxpayer_type, state_code, address, pincode, ... }
+      // gstinapi.com schema: { taxpayerInfo: { ... } } or { data: { ... } } or direct
+      const d = j.data || j.taxpayerInfo || j.result || j;
+
+      const legal = d.legal_name || d.lgnm || d.legalName || j.legal_name || j.lgnm || '';
+      const trade = d.trade_name || d.tradeNam || d.tradeName || j.trade_name || j.tradeNam || legal || '';
+      const addr = d.address || d.addr || d.pradr?.adr || j.address || '';
+      const status = d.status || d.sts || j.status || '';
+      const pincode = d.pincode || d.pradr?.pncd || j.pincode || '';
+      const stateCode = d.state_code || d.stcd || j.state_code || '';
+      const regDate = d.registration_date || d.rgdt || j.registration_date || '';
+      const taxType = d.taxpayer_type || d.dty || j.taxpayer_type || '';
+
+      if (legal || trade) {
+        return {
+          legal_name: legal,
+          trade_name: trade,
+          address: addr,
+          status: status,
+          pincode: pincode,
+          state_code: stateCode,
+          registration_date: regDate,
+          taxpayer_type: taxType,
+          source: ep.host,
+          raw: j
+        };
+      }
+
+      lastErr = new Error(`${ep.host} returned no name: ${text.slice(0, 300)}`);
+    } catch (e) {
+      // If it's a key error, throw immediately — don't try other hosts with same bad key
+      if (/Invalid API key|credits exhausted|Rate limit/i.test(e.message)) {
+        throw e;
+      }
+      lastErr = e;
+      console.warn(`[GST] ${ep.host} failed:`, e.message);
+    }
   }
 
-  const attempts = [
-    // Method 1: Try with custom gstinapi.in key if provided (100 free lookups, no captcha like Tally)
+  if (lastErr) throw lastErr;
+  return null;
+}
+
+async function tryFreePublicAPIs(gstin) {
+  // Try free public APIs without key — best effort, many are blocked but worth trying
+  const tries = [
     async () => {
-      if (!customKeys.gstinapi) throw new Error('no gstinapi key');
-      const r = await fetchWithTimeout(`https://www.gstinapi.in/v1/gstin/${gstin}`, {
-        headers: { 'x-api-key': customKeys.gstinapi, 'Accept': 'application/json' }
-      }, 8000);
-      if (!r.ok) throw new Error('gstinapi http ' + r.status);
-      const j = await r.json();
-      if (j && (j.legal_name || j.trade_name || j.gstin)) {
-        return {
-          legal_name: j.legal_name || j.lgnm || '',
-          trade_name: j.trade_name || j.tradeNam || j.legal_name || '',
-          address: j.address || j.addr || '',
-          status: j.status || j.sts || '',
-          registration_date: j.registration_date || j.rgdt || '',
-          pincode: j.pincode || '',
-          taxpayer_type: j.taxpayer_type || j.dty || '',
-          source: 'gstinapi',
-          raw: j
-        };
-      }
-      throw new Error('no data');
-    },
-    // Method 2: Try AppyFlow with key if provided (50 free, no captcha)
-    async () => {
-      if (!customKeys.appyflow) throw new Error('no appyflow key');
-      const r = await fetchWithTimeout(`https://appyflow.in/api/verifyGST?gstNo=${gstin}&key_secret=${customKeys.appyflow}`, {
-        headers: { 'Accept': 'application/json' }
-      }, 8000);
-      if (!r.ok) throw new Error('appyflow http ' + r.status);
-      const j = await r.json();
-      const info = j.taxpayerInfo || j.data || j;
-      if (info && (info.lgnm || info.tradeNam || info.legal_name)) {
-        const pradr = info.pradr || {};
-        const addr = pradr.addr ? `${pradr.addr.bno||''} ${pradr.addr.st||''} ${pradr.addr.loc||''} ${pradr.addr.dst||''} ${pradr.addr.stcd||''} ${pradr.addr.pncd||''}` : (info.address || '');
-        return {
-          legal_name: info.lgnm || info.legal_name || '',
-          trade_name: info.tradeNam || info.trade_name || info.lgnm || '',
-          address: addr || '',
-          status: info.sts || info.status || '',
-          registration_date: info.rgdt || '',
-          source: 'appyflow',
-          raw: j
-        };
-      }
-      throw new Error('no data');
-    },
-    // Method 2b: Try gstincheck.co.in with key (20 free, no captcha like Tally)
-    async () => {
-      if (!customKeys.gstincheck) throw new Error('no gstincheck key');
-      const r = await fetchWithTimeout(`https://sheet.gstincheck.co.in/check/${customKeys.gstincheck}/${gstin}`, {
-        headers: { 'Accept': 'application/json' }
-      }, 8000);
-      if (!r.ok) throw new Error('gstincheck http ' + r.status);
-      const j = await r.json();
-      const d = j.data || j;
-      if (d && (d.legal_name || d.trade_name || d.lgnm || d.tradeNam)) {
-        return {
-          legal_name: d.legal_name || d.lgnm || '',
-          trade_name: d.trade_name || d.tradeNam || d.legal_name || '',
-          address: d.address || d.addr || d.pradr?.adr || '',
-          status: d.status || d.sts || '',
-          registration_date: d.registration_date || d.rgdt || '',
-          source: 'gstincheck',
-          raw: j
-        };
-      }
-      throw new Error('no data');
-    },
-    // Method 3: Try GSTZen public (sometimes works without key)
-    async () => {
-      const r = await fetchWithTimeout(`https://api.gstzen.in/api/gstin/${gstin}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
-      }, 8000);
-      if (!r.ok) throw new Error('gstzen http ' + r.status);
+      const r = await fetchWithTimeout(`https://api.gstzen.in/api/gstin/${gstin}`, { headers: { 'Accept': 'application/json' } }, 6000);
+      if (!r.ok) throw new Error('gstzen ' + r.status);
       const j = await r.json();
       const d = j.data || j.result || j;
-      if (d && (d.legal_name || d.lgnm || d.trade_name || d.tradeNam)) {
+      if (d && (d.legal_name || d.lgnm)) {
         return {
           legal_name: d.legal_name || d.lgnm || '',
           trade_name: d.trade_name || d.tradeNam || d.legal_name || '',
-          address: d.address || d.addr || (d.pradr ? `${d.pradr.addr1||''} ${d.pradr.addr2||''}` : ''),
+          address: d.address || d.addr || '',
           status: d.status || d.sts || '',
-          registration_date: d.registration_date || d.rgdt || '',
-          pincode: d.pincode || d.pradr?.pncd || '',
+          pincode: d.pincode || '',
           source: 'gstzen',
           raw: j
         };
       }
       throw new Error('no data');
     },
-    // Method 4: Try Masters India public endpoint
     async () => {
-      const r = await fetchWithTimeout(`https://commonapi.mastersindia.co/api/v1/saas/gstin/${gstin}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
-      }, 8000);
-      if (!r.ok) throw new Error('mastersindia http ' + r.status);
+      const r = await fetchWithTimeout(`https://commonapi.mastersindia.co/api/v1/saas/gstin/${gstin}`, { headers: { 'Accept': 'application/json' } }, 6000);
+      if (!r.ok) throw new Error('masters ' + r.status);
       const j = await r.json();
       if (j && j.data) {
         const d = j.data;
         return {
-          legal_name: d.lgnm || d.legal_name || '',
-          trade_name: d.tradeNam || d.trade_name || d.lgnm || '',
-          address: d.pradr?.adr || d.address || '',
-          status: d.sts || d.status || '',
-          registration_date: d.rgdt || '',
+          legal_name: d.lgnm || '',
+          trade_name: d.tradeNam || d.lgnm || '',
+          address: d.pradr?.adr || '',
+          status: d.sts || '',
           source: 'mastersindia',
-          raw: j
-        };
-      }
-      throw new Error('no data');
-    },
-    // Method 5: Try ezyGST
-    async () => {
-      const r = await fetchWithTimeout(`https://api.ezygst.in/api/gstin/${gstin}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      }, 6000);
-      if (!r.ok) throw new Error('ezygst http ' + r.status);
-      const j = await r.json();
-      if (j && (j.legal_name || j.trade_name || j.data)) {
-        const d = j.data || j;
-        return {
-          legal_name: d.legal_name || d.lgnm || '',
-          trade_name: d.trade_name || d.tradeNam || d.legal_name || '',
-          address: d.address || d.addr || '',
-          status: d.status || '',
-          registration_date: d.registration_date || '',
-          raw: j
-        };
-      }
-      throw new Error('no data');
-    },
-    // Method 6: Try GST Search public site scrape (no captcha)
-    async () => {
-      const r = await fetchWithTimeout(`https://www.gstsearch.in/api/gstin/${gstin}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
-      }, 6000);
-      if (!r.ok) throw new Error('gstsearch http ' + r.status);
-      const j = await r.json();
-      if (j && (j.legalName || j.tradeName || j.data)) {
-        const d = j.data || j;
-        return {
-          legal_name: d.legalName || d.lgnm || '',
-          trade_name: d.tradeName || d.tradeNam || d.legalName || '',
-          address: d.address || '',
-          status: d.status || '',
           raw: j
         };
       }
       throw new Error('no data');
     }
   ];
-  
-  // Try all methods in parallel for speed, return first success
-  const results = await Promise.allSettled(attempts.map(fn => fn()));
-  for (const res of results) {
-    if (res.status === 'fulfilled' && res.value && (res.value.legal_name || res.value.trade_name)) {
-      return res.value;
-    }
-  }
-  
-  // If parallel failed, try sequential with more logging
-  for (const fn of attempts) {
+
+  for (const fn of tries) {
     try {
       const data = await fn();
-      if (data && (data.legal_name || data.trade_name)) return data;
+      if (data) return data;
     } catch (e) {
-      console.warn('GST fallback failed:', e.message);
+      console.warn('[GST] free API failed:', e.message);
     }
   }
+  return null;
+}
+
+async function fetchGSTDetailsFallback(gstin, opts = {}) {
+  const apiKey = (opts.apiKey || '').trim();
+  const provider = (opts.provider || 'auto').toLowerCase();
+
+  // 1. If API key provided, try GSP APIs first (Tally-like, no captcha)
+  if (apiKey) {
+    try {
+      // If provider is specific, we still try gstinapi first as it is most reliable
+      const data = await tryGSTINAPI(gstin, apiKey);
+      if (data) return data;
+    } catch (e) {
+      // Key errors should be surfaced to user, not silently ignored
+      if (/Invalid API key|credits exhausted|Rate limit|not found/i.test(e.message)) {
+        throw e; // let verifyGSTIN show this error
+      }
+      console.warn('[GST] GSP API failed, trying free:', e.message);
+    }
+
+    // Try AppyFlow if provider is appyflow
+    if (provider === 'appyflow' || provider === 'auto') {
+      try {
+        const r = await fetchWithTimeout(`https://appyflow.in/api/verifyGST?gstNo=${gstin}&key_secret=${apiKey}`, { headers: { 'Accept': 'application/json' } }, 8000);
+        if (r.ok) {
+          const j = await r.json();
+          const info = j.taxpayerInfo || j.data || j;
+          if (info && (info.lgnm || info.tradeNam)) {
+            const pradr = info.pradr || {};
+            const addr = pradr.addr ? `${pradr.addr.bno||''} ${pradr.addr.st||''} ${pradr.addr.loc||''} ${pradr.addr.dst||''}`.trim() : (info.address || '');
+            return {
+              legal_name: info.lgnm || '',
+              trade_name: info.tradeNam || info.lgnm || '',
+              address: addr,
+              status: info.sts || '',
+              registration_date: info.rgdt || '',
+              source: 'appyflow',
+              raw: j
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('[GST] appyflow failed:', e.message);
+      }
+    }
+
+    // Try gstincheck if provider is gstincheck
+    if (provider === 'gstincheck') {
+      try {
+        const r = await fetchWithTimeout(`https://sheet.gstincheck.co.in/check/${apiKey}/${gstin}`, { headers: { 'Accept': 'application/json' } }, 8000);
+        if (r.ok) {
+          const j = await r.json();
+          const d = j.data || j;
+          if (d && (d.legal_name || d.lgnm)) {
+            return {
+              legal_name: d.legal_name || d.lgnm || '',
+              trade_name: d.trade_name || d.tradeNam || d.legal_name || '',
+              address: d.address || d.pradr?.adr || '',
+              status: d.status || d.sts || '',
+              source: 'gstincheck',
+              raw: j
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('[GST] gstincheck failed:', e.message);
+      }
+    }
+  }
+
+  // 2. Try free public APIs without key
+  try {
+    const freeData = await tryFreePublicAPIs(gstin);
+    if (freeData) return freeData;
+  } catch (_) {}
+
   return null;
 }
 
@@ -575,24 +474,55 @@ export async function verifyGSTIN(gstin, opts = {}) {
     return { ...v, verified: !!cached.data, details: cached.data, cached: true };
   }
 
-  // Try fallback free APIs first (no captcha needed) — if they work, return live data
+  // Try GSP / free APIs (Tally-like, no captcha)
   try {
     const details = await fetchGSTDetailsFallback(v.gstin, opts);
-    if (details) {
+    if (details && (details.legal_name || details.trade_name)) {
       _cache.set(v.gstin, { at: Date.now(), data: details });
-      return { ...v, verified: true, details, cached: false };
+      return {
+        ...v,
+        verified: true,
+        details,
+        cached: false,
+        message: `✓ Verified LIVE via ${details.source} — ${details.trade_name || details.legal_name} — auto-filled (Tally-like, no captcha)`
+      };
     }
-  } catch (e) { console.warn("GST fallback error:", e.message); }
+  } catch (e) {
+    // If API key error, return it as error so UI shows why auto-fill failed
+    const msg = e.message || String(e);
+    if (/Invalid API key|credits exhausted|Rate limit/i.test(msg)) {
+      return {
+        ...v,
+        verified: false,
+        details: null,
+        api_error: true,
+        error: msg,
+        offline_valid: true,
+        needs_captcha: false,
+        message: `GSTIN ✓ Format valid (${v.state_name}, PAN ${v.pan}) but GSP API failed: ${msg}. Fix API key in Settings → GST auto-fill, or use captcha fallback.`
+      };
+    }
+    if (/not found/i.test(msg)) {
+      return {
+        ...v,
+        verified: false,
+        details: null,
+        error: msg,
+        offline_valid: false,
+        message: msg
+      };
+    }
+    console.warn('[GST] fallback error:', msg);
+  }
 
-  // No live data, but GSTIN itself is valid — return offline parsed info
-  // This is still usable - user can save ledger, live fetch is optional enhancement
+  // No live data, but GSTIN format valid — return offline info (PAN auto-fill still works)
   return {
     ...v,
     verified: false,
     details: null,
     needs_captcha: true,
     offline_valid: true,
-    message: `GSTIN ✓ Valid — ${v.state_name} (${v.state_code}) · PAN ${v.pan} · Format and checksum verified. ${opts.apiKey ? "API key provided but live fetch failed — check key or try captcha." : "For Tally-like auto-fill without captcha, add free API key in Settings → GST auto-fill (gstinapi.in 100 free). Or click \"Get Captcha & Fetch Live\" if portal reachable."} You can still save ledger — offline validation is sufficient.`
+    message: `GSTIN ✓ Valid — ${v.state_name} (${v.state_code}) · PAN ${v.pan} · Checksum OK. ${opts.apiKey ? 'API key present but live fetch failed — check key, credits, internet, or try captcha.' : 'For Tally-like auto-fill without captcha: add free API key in Settings → GST auto-fill (gstinapi.in gives 100 free/month, no card). Or click "Get Captcha & Fetch Live" for official portal.'} You can still save ledger — offline validation is sufficient.`
   };
 }
 

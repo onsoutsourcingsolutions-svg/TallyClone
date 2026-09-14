@@ -56,7 +56,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
   const verifyGst = async () => {
     const g = String(f.gstin || '').trim().toUpperCase();
     if (!g) { setErr('Enter GSTIN first — e.g. 27ABCDE1234F1Z5'); return; }
-    // Immediately auto-fill PAN from GSTIN (chars 2-12)
+    // Immediately auto-fill PAN from GSTIN (chars 2-12) — Tally-like instant
     if (g.length >= 12) {
       const panFromGstin = g.slice(2, 12);
       if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panFromGstin)) {
@@ -69,22 +69,29 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
       const j = await api('/gst/verify?gstin=' + encodeURIComponent(g));
       if (!j.ok) throw new Error(j.error || 'GST verification failed');
       setGstState({ loading: false, data: j, error: '' });
-      // Always auto-fill PAN when verify clicked
+      // Always auto-fill PAN when verify clicked (from GSTIN itself)
       if (j.pan) setF(prev => ({ ...prev, pan: j.pan }));
+      // Handle API key errors explicitly — show why auto-fill failed
+      if (j.api_error) {
+        setErr(j.error || j.message);
+        notify(j.error || 'GSP API key error — check Settings');
+        return;
+      }
       if (j.details) {
         const d = j.details;
-        // Auto-fill name and address immediately when live details available
         const updates = {};
         if (d.trade_name || d.legal_name) updates.name = d.trade_name || d.legal_name;
         if (d.address) updates.address = d.address;
         if (j.pan) updates.pan = j.pan;
         if (Object.keys(updates).length) {
           setF(prev => ({ ...prev, ...updates }));
-          notify(`GSTIN ✓ ${j.state_name || ''} — ${d.trade_name || d.legal_name} auto-filled ✓`);
+          notify(`GSTIN ✓ ${j.state_name || ''} — ${d.trade_name || d.legal_name} auto-filled via ${d.source || 'GSP'} ✓ (Tally-like, no captcha)`);
         } else {
           notify(`GSTIN ✓ ${j.state_name} — format valid${j.verified ? '' : ' (live details unavailable offline)'}`);
         }
       } else {
+        // Offline valid — PAN already filled, show message about API key or captcha
+        if (j.error) setErr(j.error);
         notify(`GSTIN ✓ ${j.state_name} — valid. PAN auto-filled ✓. ${j.message || ''}`);
         if (j.needs_captcha) fetchCaptcha();
       }
@@ -232,9 +239,14 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
           </div>
 
           {gstState.data && (
-            <div style={{ border: '1px solid var(--gold-line-soft)', borderRadius: 8, padding: 10, marginBottom: 10, background: 'var(--gold-soft)' }}>
+            <div style={{ border: gstState.data.api_error ? '1px solid #e74c3c' : '1px solid var(--gold-line-soft)', borderRadius: 8, padding: 10, marginBottom: 10, background: gstState.data.api_error ? '#fff5f5' : 'var(--gold-soft)' }}>
               <div style={{ fontSize: 12.5 }}>
-                <b style={{ color: 'var(--ok)' }}>✓ GSTIN Valid — {gstState.data.state_name} ({gstState.data.state_code}) · PAN {gstState.data.pan} {gstState.data.verified ? '· Verified LIVE from GST portal' : '· Format valid'}</b>
+                <b style={{ color: gstState.data.api_error ? '#c0392b' : 'var(--ok)' }}>
+                  {gstState.data.api_error ? '⚠ ' : '✓ '}GSTIN {gstState.data.valid ? 'Valid' : 'Invalid'} — {gstState.data.state_name} ({gstState.data.state_code}) · PAN {gstState.data.pan} {gstState.data.verified ? `· Verified LIVE via ${gstState.data.details?.source || 'GSP'}` : '· Format valid'}
+                </b>
+                {gstState.data.api_error && (
+                  <div className="errbox" style={{ marginTop: 8 }}>{gstState.data.error || gstState.data.message}</div>
+                )}
                 {gstState.data.details && (
                   <>
                     <div style={{ marginTop: 6 }}><b>Legal:</b> {gstState.data.details.legal_name || '—'} · <b>Trade:</b> {gstState.data.details.trade_name || '—'}</div>
@@ -244,6 +256,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
                       {gstState.data.details.registration_date && <>Reg. Date: {gstState.data.details.registration_date} · </>}
                       {gstState.data.details.taxpayer_type && <>Type: {gstState.data.details.taxpayer_type}</>}
                       {gstState.data.details.pincode && <> · Pincode: {gstState.data.details.pincode}</>}
+                      {gstState.data.details.source && <> · Source: <b>{gstState.data.details.source}</b></>}
                       {gstState.data.details.business_nature && <><br/>Nature: {gstState.data.details.business_nature}</>}
                     </div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -252,7 +265,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
                     </div>
                   </>
                 )}
-                {!gstState.data.details && (
+                {!gstState.data.details && !gstState.data.api_error && (
                   <div style={{ marginTop: 8 }}>
                     <div className="faint" style={{ fontSize: 12, marginBottom: 6 }}>{gstState.data.message}</div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -266,7 +279,7 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
                         </>
                       )}
                     </div>
-                    <div className="faint" style={{ fontSize: 10.5, marginTop: 4 }}>Live data comes directly from services.gst.gov.in — requires internet + captcha. If portal is down, you can still save with offline validation.</div>
+                    <div className="faint" style={{ fontSize: 10.5, marginTop: 4 }}>Live data: first tries your GSP API key (Tally-like, no captcha) → then free APIs → then GST portal captcha. Offline validation always works.</div>
                   </div>
                 )}
               </div>
