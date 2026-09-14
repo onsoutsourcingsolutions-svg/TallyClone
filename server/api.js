@@ -498,7 +498,17 @@ api.get('/gst/captcha', async (req, res) => {
   try {
     const cap = await getGSTCaptcha();
     ok(res, cap);
-  } catch (e) { fail(res, e); }
+  } catch (e) {
+    // Don't fail hard - return info that live fetch unavailable but offline still works
+    // This prevents "Could not reach GST portal" from blocking ledger save
+    res.status(200).json({ 
+      ok: false, 
+      error: e.message,
+      captcha_unavailable: true,
+      offline_ok: true,
+      message: 'Live GST fetch temporarily unavailable. Your GSTIN is still valid offline (state, PAN, checksum verified) and you can save the ledger. You can manually enter name/address or try again later. Manual check: https://services.gst.gov.in/services/searchtp'
+    });
+  }
 });
 
 api.get('/gst/states', (req, res) => {

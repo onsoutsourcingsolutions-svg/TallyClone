@@ -70,12 +70,28 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
     setErr('');
     try {
       const j = await api('/gst/captcha');
-      if (!j.ok) throw new Error(j.error || 'Could not get captcha from GST portal');
+      if (!j.ok) {
+        // Check if it's captcha unavailable but offline ok
+        if (j.captcha_unavailable) {
+          setCaptcha(c => ({ ...c, loading: false, img: '', id: '' }));
+          // Don't show as error - show as info that offline is ok
+          notify('GSTIN is valid offline ✓ — Live fetch from GST portal temporarily unavailable. You can still save ledger with manual name/address. ' + (j.message || ''));
+          // Keep existing gstState data if any, don't clear
+          return;
+        }
+        throw new Error(j.error || 'Could not get captcha from GST portal');
+      }
       setCaptcha({ id: j.captcha_id, img: j.data_uri || `data:${j.mime};base64,${j.image_base64}`, loading: false, value: '' });
       notify('Captcha loaded from GST portal — enter the 6 characters');
     } catch (e) {
       setCaptcha(c => ({ ...c, loading: false }));
-      setErr(e.message);
+      // If error is about GST portal unreachable, don't block - show offline is ok
+      if (/Could not reach GST portal|fetch failed|temporarily unavailable/i.test(e.message)) {
+        notify('GSTIN valid offline ✓ — Live GST portal unreachable right now. You can still save ledger. Check internet or try manual: services.gst.gov.in/services/searchtp');
+        setErr(''); // Don't show as red error, offline is still valid
+      } else {
+        setErr(e.message);
+      }
     }
   };
 

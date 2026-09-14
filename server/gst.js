@@ -99,6 +99,49 @@ async function fetchWithTimeout(url, opts = {}, ms = 10000) {
   }
 }
 
+// Fallback using Node https for environments where fetch fails (e.g., GST portal blocking)
+async function fetchWithHttps(url) {
+  const https = await import('node:https');
+  const http = await import('node:http');
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https') ? https : http;
+    const req = lib.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/*,*/*',
+        'Referer': 'https://services.gst.gov.in/services/searchtp'
+      },
+      timeout: 15000
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        // Mock fetch-like response
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          headers: {
+            get: (name) => {
+              const n = name.toLowerCase();
+              if (n === 'content-type') return res.headers['content-type'] || '';
+              if (n === 'set-cookie') return res.headers['set-cookie']?.join('; ') || '';
+              return res.headers[n] || null;
+            },
+            getSetCookie: () => res.headers['set-cookie'] || []
+          },
+          arrayBuffer: async () => buf
+        });
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('HTTPS timeout'));
+    });
+  });
+}
+
 const GST_CAPTCHA_URL = 'https://services.gst.gov.in/services/captcha?rnd=';
 const GST_DETAILS_URL = 'https://services.gst.gov.in/services/api/search/taxpayerDetails';
 const INVALID_GST_CODE = 'SWEB_9035';
@@ -106,70 +149,121 @@ const INVALID_CAPTCHA_CODE = 'SWEB_9000';
 
 export async function getGSTCaptcha() {
   cleanupCaptcha();
-  const url = GST_CAPTCHA_URL + Math.random();
-  let r;
-  try {
-    r = await fetchWithTimeout(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://services.gst.gov.in/services/searchtp',
-        'Origin': 'https://services.gst.gov.in'
-      }
-    }, 12000);
-  } catch (e) {
-    throw new Error('Could not reach GST portal for captcha — check internet. ' + e.message);
-  }
-  if (!r.ok) throw new Error('GST captcha service returned HTTP ' + r.status);
-
-  const buf = Buffer.from(await r.arrayBuffer());
-  if (buf.length < 100) throw new Error('GST captcha image too small — portal may be blocking.');
-
-  // parse CaptchaCookie
-  let cookie = '';
-  try {
-    const setCookies = r.headers.getSetCookie ? r.headers.getSetCookie() : [r.headers.get('set-cookie') || ''];
-    for (const sc of setCookies) {
-      if (!sc) continue;
-      const parts = sc.split(';');
-      for (const p of parts) {
-        const kv = p.trim().split('=');
-        if (kv[0] === 'CaptchaCookie' && kv[1]) {
-          cookie = kv[1];
-          break;
+  
+  // Try multiple methods to get captcha
+  const methods = [
+    // Method 1: Direct fetch with standard headers
+    async () => {
+      const url = GST_CAPTCHA_URL + Math.random();
+      const r = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://services.gst.gov.in/services/searchtp',
+          'Origin': 'https://services.gst.gov.in'
         }
-      }
-      if (cookie) break;
+      }, 15000);
+      return r;
+    },
+    // Method 2: Fetch search page first to get session, then captcha
+    async () => {
+      await fetchWithTimeout('https://services.gst.gov.in/services/searchtp', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      }, 8000).catch(() => {});
+      const url = GST_CAPTCHA_URL + Math.random();
+      const r = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'image/*',
+          'Referer': 'https://services.gst.gov.in/services/searchtp'
+        }
+      }, 15000);
+      return r;
+    },
+    // Method 3: Try with minimal headers
+    async () => {
+      const url = GST_CAPTCHA_URL + Math.random();
+      const r = await fetchWithTimeout(url, { method: 'GET' }, 15000);
+      return r;
+    },
+    // Method 4: Try with Node https directly (bypasses fetch issues)
+    async () => {
+      const url = GST_CAPTCHA_URL + Math.random();
+      const r = await fetchWithHttps(url);
+      return r;
     }
-    // fallback: try to extract from raw header
-    if (!cookie) {
-      const raw = r.headers.get('set-cookie') || '';
-      const m = /CaptchaCookie=([^;]+)/i.exec(raw);
-      if (m) cookie = m[1];
-    }
-  } catch (_) {}
+  ];
 
-  if (!cookie) {
-    // Some deployments return cookie via header x-captcha? try to still proceed but warn
-    // We'll still store empty and let verification fail with clear message
-    console.warn('GST captcha: no CaptchaCookie found in response');
+  let lastError = null;
+  for (let i = 0; i < methods.length; i++) {
+    try {
+      const r = await methods[i]();
+      if (!r.ok) {
+        lastError = new Error(`GST portal HTTP ${r.status} (method ${i+1})`);
+        continue;
+      }
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length < 100) {
+        lastError = new Error(`GST captcha too small (${buf.length} bytes) - portal blocking (method ${i+1})`);
+        continue;
+      }
+
+      // parse CaptchaCookie
+      let cookie = '';
+      try {
+        const setCookies = r.headers.getSetCookie ? r.headers.getSetCookie() : [r.headers.get('set-cookie') || ''];
+        for (const sc of setCookies) {
+          if (!sc) continue;
+          const parts = sc.split(';');
+          for (const p of parts) {
+            const kv = p.trim().split('=');
+            if (kv[0] === 'CaptchaCookie' && kv[1]) {
+              cookie = kv[1];
+              break;
+            }
+          }
+          if (cookie) break;
+        }
+        if (!cookie) {
+          const raw = r.headers.get('set-cookie') || '';
+          const m = /CaptchaCookie=([^;]+)/i.exec(raw);
+          if (m) cookie = m[1];
+        }
+      } catch (_) {}
+
+      const b64 = buf.toString('base64');
+      const mime = r.headers.get('content-type') || 'image/png';
+      const id = genId();
+      _captchaStore.set(id, { cookie, at: Date.now() });
+
+      return {
+        captcha_id: id,
+        captcha_cookie: cookie,
+        image_base64: b64,
+        mime,
+        data_uri: `data:${mime};base64,${b64}`,
+        expires_in: CAPTCHA_TTL,
+        method: i+1
+      };
+    } catch (e) {
+      lastError = e;
+      console.warn(`GST captcha method ${i+1} failed:`, e.message);
+      continue;
+    }
   }
 
-  const b64 = buf.toString('base64');
-  const mime = r.headers.get('content-type') || 'image/png';
-  const id = genId();
-  _captchaStore.set(id, { cookie, at: Date.now() });
-
-  return {
-    captcha_id: id,
-    captcha_cookie: cookie, // also return for debugging, but frontend should use id
-    image_base64: b64,
-    mime,
-    data_uri: `data:${mime};base64,${b64}`,
-    expires_in: CAPTCHA_TTL
-  };
+  // All methods failed - provide helpful error
+  throw new Error(
+    `Could not reach GST portal for captcha after ${methods.length} attempts. ` +
+    `Last error: ${lastError?.message || 'unknown'}. ` +
+    `This can happen if: (1) Internet is down, (2) GST portal is blocking, ` +
+    `(3) Firewall/antivirus blocking. Try: check internet, disable VPN, ` +
+    `or use offline GSTIN validation (still works for saving ledgers). ` +
+    `You can also manually check at https://services.gst.gov.in/services/searchtp`
+  );
 }
 
 function parseGSTResponse(j) {
@@ -281,8 +375,49 @@ export async function verifyGSTINWithCaptcha(gstin, captcha, opts = {}) {
 }
 
 // Fallback attempt using free public APIs (no captcha) — best effort
+// These are tried before captcha flow, and also when captcha fails
 async function fetchGSTDetailsFallback(gstin) {
   const attempts = [
+    // Try GSTZen / free proxy APIs
+    async () => {
+      const r = await fetchWithTimeout(`https://api.gstzen.in/api/gstin/${gstin}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+      }, 8000);
+      if (!r.ok) throw new Error('gstzen http ' + r.status);
+      const j = await r.json();
+      const d = j.data || j.result || j;
+      if (d && (d.legal_name || d.lgnm || d.trade_name || d.tradeNam)) {
+        return {
+          legal_name: d.legal_name || d.lgnm || '',
+          trade_name: d.trade_name || d.tradeNam || d.legal_name || '',
+          address: d.address || d.addr || (d.pradr ? `${d.pradr.addr1||''} ${d.pradr.addr2||''}` : ''),
+          status: d.status || d.sts || '',
+          registration_date: d.registration_date || d.rgdt || '',
+          pincode: d.pincode || d.pradr?.pncd || '',
+          raw: j
+        };
+      }
+      throw new Error('no data');
+    },
+    async () => {
+      const r = await fetchWithTimeout(`https://commonapi.mastersindia.co/api/v1/saas/gstin/${gstin}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+      }, 8000);
+      if (!r.ok) throw new Error('mastersindia http ' + r.status);
+      const j = await r.json();
+      if (j && j.data) {
+        const d = j.data;
+        return {
+          legal_name: d.lgnm || d.legal_name || '',
+          trade_name: d.tradeNam || d.trade_name || d.lgnm || '',
+          address: d.pradr?.adr || d.address || '',
+          status: d.sts || d.status || '',
+          registration_date: d.rgdt || '',
+          raw: j
+        };
+      }
+      throw new Error('no data');
+    },
     async () => {
       const r = await fetchWithTimeout(`https://api.ezygst.in/api/gstin/${gstin}`, {
         headers: { 'User-Agent': 'Mozilla/5.0' }
@@ -301,32 +436,15 @@ async function fetchGSTDetailsFallback(gstin) {
         };
       }
       throw new Error('no data');
-    },
-    async () => {
-      const r = await fetchWithTimeout(`https://api.apyhub.com/validate/gst?gstin=${gstin}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      }, 6000);
-      if (!r.ok) throw new Error('apyhub http ' + r.status);
-      const j = await r.json();
-      if (j && j.data) {
-        const d = j.data;
-        return {
-          legal_name: d.legal_name || d.lgnm || '',
-          trade_name: d.trade_name || d.tradeNam || d.legal_name || '',
-          address: d.address || '',
-          status: d.status || d.sts || '',
-          registration_date: d.registration_date || d.rgdt || '',
-          raw: j
-        };
-      }
-      throw new Error('no data');
     }
   ];
   for (const fn of attempts) {
     try {
       const data = await fn();
       if (data && (data.legal_name || data.trade_name)) return data;
-    } catch (_) {}
+    } catch (e) {
+      console.warn('GST fallback failed:', e.message);
+    }
   }
   return null;
 }
@@ -349,13 +467,15 @@ export async function verifyGSTIN(gstin) {
     }
   } catch (_) {}
 
-  // No live data, but GSTIN itself is valid — return offline parsed info with message to use captcha flow
+  // No live data, but GSTIN itself is valid — return offline parsed info
+  // This is still usable - user can save ledger, live fetch is optional enhancement
   return {
     ...v,
     verified: false,
     details: null,
     needs_captcha: true,
-    message: 'GSTIN format is valid, but live details need captcha. Click "Get Captcha & Fetch Live" to pull name, address, status from GST portal.'
+    offline_valid: true,
+    message: `GSTIN ✓ Valid — ${v.state_name} (${v.state_code}) · PAN ${v.pan} · Format and checksum verified. Live details from GST portal require captcha (click "Get Captcha & Fetch Live" if portal reachable). You can still save ledger with this GSTIN — offline validation is sufficient for books.`
   };
 }
 
