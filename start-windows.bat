@@ -23,6 +23,20 @@ echo test > "%~dp0.wtest" 2>nul
 if not exist "%~dp0.wtest" goto :zipped
 del "%~dp0.wtest" >nul 2>nul
 
+rem --- 3b. Auto-backup data before start (keeps last 20) ---
+if exist "data\tally.db" (
+  if not exist "data\backups" mkdir "data\backups" >nul 2>nul
+  for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value 2^>nul') do set dt=%%I
+  if defined dt (
+    set stamp=%dt:~0,4%-%dt:~4,2%-%dt:~6,2%_%dt:~8,2%-%dt:~10,2%-%dt:~12,2%
+  ) else (
+    set stamp=%date:~-4%-%date:~-7,2%-%date:~-10,2%_%time:~0,2%-%time:~3,2%-%time:~6,2%
+    set stamp=%stamp: =0%
+  )
+  copy /y "data\tally.db" "data\backups\backup-%stamp%-startup.db" >nul 2>nul
+  echo   Auto-backup: data\backups\backup-%stamp%-startup.db
+)
+
 rem --- 4. Always make sure packages are installed (fast when already done) ---
 echo.
 echo  [step 1/3] Checking packages (first time: 1-3 minutes)...

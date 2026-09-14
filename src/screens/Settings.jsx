@@ -273,6 +273,80 @@ export function SettingsScreen() {
           build after updating, press <b>Ctrl+F5</b> once (Help → “Still seeing the old version?”).
         </p>
       </div>
+      <div className="card" style={{ borderLeft: '4px solid #2ecc71' }}>
+        <h3>💾 Auto-backup — your data is safe</h3>
+        <BackupPanel />
+      </div>
+    </div>
+  );
+}
+
+function BackupPanel() {
+  const { notify } = useApp();
+  const [backs, setBacks] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    try {
+      const j = await api('/backups');
+      setBacks(j.backups || []);
+    } catch (e) { setBacks([]); }
+  };
+  useEffect(() => { load(); }, []);
+  const create = async () => {
+    setBusy(true);
+    try {
+      const j = await api('/backups/create', { method: 'POST', body: { reason: 'manual' } });
+      notify('Backup created: ' + j.backup.name);
+      load();
+    } catch (e) { notify(e.message); }
+    setBusy(false);
+  };
+  const download = (name) => {
+    window.open('/api/backups/download/' + encodeURIComponent(name), '_blank');
+  };
+  const restore = async (name) => {
+    if (!window.confirm(`Restore backup "${name}"? Current data will be backed up as pre-restore first.`)) return;
+    setBusy(true);
+    try {
+      const j = await api('/backups/restore/' + encodeURIComponent(name), { method: 'POST' });
+      notify('Restored ' + name + ' — refresh page');
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (e) { notify(e.message); }
+    setBusy(false);
+  };
+  return (
+    <div>
+      <p className="muted" style={{ margin: '0 0 10px', fontSize: 13 }}>
+        Every time you start the app or click <b>Update now</b>, your <code>data/tally.db</code> is auto-backed up to <code>data/backups/</code>.
+        Keeps last 20 backups. If you ever lose data (like extracting zip over folder), restore from here. You can also ask me to give you a backup — I can guide to download from this list.
+      </p>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <button className="btn sm" onClick={create} disabled={busy}>{busy ? '...' : '+ Create backup now'}</button>
+        <button className="btn ghost sm" onClick={load} disabled={busy}>↻ Refresh list</button>
+        <span className="faint" style={{ fontSize: 11 }}>Location on your PC: <code>C:\Users\ADITYA MISHRA\Desktop\TallyClone\data\backups\</code> (or your current path)</span>
+      </div>
+      {backs === null && <div className="empty">Loading backups…</div>}
+      {backs && backs.length === 0 && <div className="empty">No backups yet — one will be created on next start / update. Create one manually above.</div>}
+      {backs && backs.length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="grid">
+            <thead><tr><th>Backup file</th><th>Created</th><th className="tright">Size</th><th></th></tr></thead>
+            <tbody>
+              {backs.map(b => (
+                <tr key={b.name}>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{b.name}</td>
+                  <td className="muted" style={{ fontSize: 12 }}>{new Date(b.created).toLocaleString()}</td>
+                  <td className="tright num">{b.size_kb} KB</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button className="btn ghost sm" onClick={() => download(b.name)}>Download</button>{' '}
+                    <button className="btn danger sm" onClick={() => restore(b.name)}>Restore</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

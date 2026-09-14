@@ -529,6 +529,85 @@ api.get('/gst/states', (req, res) => {
   ok(res, { states: STATE_CODES });
 });
 
+// ---------- backup system - auto backup data on every start and before updates ----------
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+function backupData(reason = 'manual') {
+  try {
+    const dbPath = path.join(DATA_DIR, 'tally.db');
+    if (!fs.existsSync(dbPath)) return null;
+    const stats = fs.statSync(dbPath);
+    if (stats.size < 1000) return null; // don't backup empty db
+    const now = new Date();
+    const stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const name = `backup-${stamp}-${reason}.db`;
+    const dest = path.join(BACKUP_DIR, name);
+    fs.copyFileSync(dbPath, dest);
+    // Keep only last 20 backups, delete older
+    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('backup-') && f.endsWith('.db')).sort().reverse();
+    for (let i = 20; i < files.length; i++) {
+      try { fs.unlinkSync(path.join(BACKUP_DIR, files[i])); } catch (_) {}
+    }
+    console.log(`[backup] Created ${name} (${(stats.size/1024).toFixed(1)}KB) reason=${reason}`);
+    return { name, size: stats.size, created: now.toISOString() };
+  } catch (e) {
+    console.warn('[backup] Failed:', e.message);
+    return null;
+  }
+}
+
+// Auto backup on server start
+backupData('startup');
+
+api.get('/backups', (req, res) => {
+  try {
+    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.db')).map(f => {
+      const fp = path.join(BACKUP_DIR, f);
+      const st = fs.statSync(fp);
+      return { name: f, size: st.size, created: st.mtime.toISOString(), size_kb: (st.size/1024).toFixed(1) };
+    }).sort((a,b) => b.created.localeCompare(a.created));
+    ok(res, { backups: files, backup_dir: BACKUP_DIR, data_dir: DATA_DIR });
+  } catch (e) { fail(res, e); }
+});
+
+api.post('/backups/create', (req, res) => {
+  try {
+    const reason = String(req.body?.reason || 'manual').replace(/[^a-z0-9_-]/gi, '_').slice(0, 30);
+    const b = backupData(reason);
+    if (!b) throw new Error('No data to backup or backup failed');
+    ok(res, { backup: b });
+  } catch (e) { fail(res, e); }
+});
+
+api.get('/backups/download/:name', (req, res) => {
+  try {
+    const name = path.basename(String(req.params.name || ''));
+    if (!name.startsWith('backup-') || !name.endsWith('.db')) throw new Error('Invalid backup name');
+    const fp = path.join(BACKUP_DIR, name);
+    if (!fs.existsSync(fp)) throw Object.assign(new Error('Backup not found'), { status: 404 });
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Content-Disposition', `attachment; filename="${name}"`);
+    res.sendFile(fp);
+  } catch (e) { fail(res, e); }
+});
+
+api.post('/backups/restore/:name', (req, res) => {
+  try {
+    const c = companyOr(res);
+    if (!c) return;
+    const name = path.basename(String(req.params.name || ''));
+    if (!name.startsWith('backup-') || !name.endsWith('.db')) throw new Error('Invalid backup name');
+    const fp = path.join(BACKUP_DIR, name);
+    if (!fs.existsSync(fp)) throw Object.assign(new Error('Backup not found'), { status: 404 });
+    // Backup current before restore
+    backupData('pre-restore');
+    const dbPath = path.join(DATA_DIR, 'tally.db');
+    fs.copyFileSync(fp, dbPath);
+    ok(res, { restored: name });
+  } catch (e) { fail(res, e); }
+});
+
 // edit log for the company (audit trail screen)
 api.get('/edit-log', (req, res) => {
   const c = companyOr(res);
@@ -654,6 +733,9 @@ api.get('/ping', (req, res) => ok(res, {}));
 
 api.post('/update/apply', async (req, res) => {
   try {
+    // 0. backup data before any update (auto backup)
+    backupData('pre-update');
+
     // 1. confirm a genuinely newer build is published
     let latest = null;
     try { latest = await remoteBuildTag(); } catch (_) { /* fall through */ }
