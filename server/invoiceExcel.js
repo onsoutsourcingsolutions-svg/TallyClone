@@ -518,20 +518,22 @@ function parseFormatted(aoa) {
   };
 }
 
-export async function parseInvoiceWorkbook(buf, filename = '') {
+export async function parseInvoiceWorkbook(buf, filename = '', sheetNameHint = '') {
   const X = await xlsxLib();
   const wb = X.read(buf, { type: 'buffer' });
-  const sheetName = wb.SheetNames.find(s => /invoice|pi|sales/i.test(s)) || wb.SheetNames[0];
+  // If sheet hint provided, use it, else find first invoice-like sheet
+  let sheetName = sheetNameHint || wb.SheetNames.find(s => /invoice|pi|sales/i.test(s)) || wb.SheetNames[0];
+  if (!wb.Sheets[sheetName]) sheetName = wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
   const aoa = X.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
   const rowsObj = X.utils.sheet_to_json(ws, { defval: '' });
 
-  // Try bulk tabular first (many invoices in one file)
+  // Try bulk tabular first (many invoices in one sheet grouped by invoice_no)
   try {
     const bulk = parseTabularBulk(aoa, rowsObj);
     if (bulk && bulk.length) {
       if (bulk.length === 1) return bulk[0];
-      return bulk; // array of invoices
+      return bulk;
     }
   } catch (_) {}
   let parsed = null;
@@ -541,13 +543,95 @@ export async function parseInvoiceWorkbook(buf, filename = '') {
   if (parsed && parsed.items && parsed.items.length) return parsed;
 
   parsed = parseFormatted(aoa);
+  if (parsed && parsed.items && parsed.items.length) {
+    // Attach sheet name as invoice source if invoice_no is generic
+    if (!parsed.invoice_no || /^PI-/.test(parsed.invoice_no)) {
+      // Use sheet name as invoice no if sheet name looks like invoice number
+      if (sheetName && !/^(Info|Mapping|Read Me|Instructions|Template|Sample|Invoices)$/i.test(sheetName)) {
+        parsed.invoice_no = sheetName;
+      }
+    }
+  }
   return parsed;
 }
 
+// NEW v1.11.23: Multi-sheet support — one workbook, each sheet = one bill
+// User has Excel with all previous bills, each in different sheet of same worksheet
 export async function parseInvoiceWorkbookBulk(buf, filename = '') {
-  const parsed = await parseInvoiceWorkbook(buf, filename);
-  if (Array.isArray(parsed)) return parsed;
-  return parsed ? [parsed] : [];
+  const X = await xlsxLib();
+  const wb = X.read(buf, { type: 'buffer' });
+  const skipSheets = new Set(['Info', 'Mapping', 'Read Me', 'Instructions', 'Template', 'Sample', 'Invoices', 'Info Sheet']);
+  const results = [];
+
+  for (const sheetName of wb.SheetNames) {
+    if (skipSheets.has(sheetName)) continue;
+    if (/^(info|mapping|read me|instructions|template|sample)$/i.test(sheetName)) continue;
+    
+    const ws = wb.Sheets[sheetName];
+    if (!ws) continue;
+    
+    const aoa = X.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
+    const rowsObj = X.utils.sheet_to_json(ws, { defval: '' });
+    
+    if (!aoa.length && !rowsObj.length) continue; // empty sheet
+    
+    try {
+      // Try tabular bulk first — if sheet itself has multiple invoices grouped by invoice_no
+      const bulk = parseTabularBulk(aoa, rowsObj);
+      if (bulk && bulk.length) {
+        for (const inv of bulk) {
+          if (inv.items && inv.items.length) {
+            // Ensure invoice_no uses sheet name if generic
+            if (!inv.invoice_no || inv.invoice_no === 'INV' || /^PI-/.test(inv.invoice_no)) {
+              if (!/^(Sheet\d+)$/i.test(sheetName)) inv.invoice_no = sheetName;
+            }
+            inv._sheet = sheetName;
+            results.push(inv);
+          }
+        }
+        continue;
+      }
+    } catch (_) {}
+    
+    try {
+      const single = parseTabular(aoa, rowsObj);
+      if (single && single.items && single.items.length) {
+        if (!single.invoice_no || single.invoice_no === 'INV' || /^PI-/.test(single.invoice_no)) {
+          if (!/^(Sheet\d+)$/i.test(sheetName)) single.invoice_no = sheetName;
+        }
+        single._sheet = sheetName;
+        results.push(single);
+        continue;
+      }
+    } catch (_) {}
+    
+    try {
+      const formatted = parseFormatted(aoa);
+      if (formatted && formatted.items && formatted.items.length) {
+        if (!formatted.invoice_no || /^PI-/.test(formatted.invoice_no)) {
+          if (!/^(Sheet\d+)$/i.test(sheetName)) formatted.invoice_no = sheetName;
+        }
+        formatted._sheet = sheetName;
+        results.push(formatted);
+      }
+    } catch (_) {}
+  }
+
+  // Fallback: if no sheets parsed (maybe all were skipped), try original single-sheet logic
+  if (!results.length) {
+    const fallback = await parseInvoiceWorkbook(buf, filename, '');
+    if (Array.isArray(fallback)) return fallback;
+    return fallback ? [fallback] : [];
+  }
+
+  // Sort by date chrono order (DD/MM/YYYY) if dates available
+  results.sort((a, b) => {
+    const da = a.date || '', db = b.date || '';
+    if (da && db) return da.localeCompare(db);
+    return 0;
+  });
+
+  return results;
 }
 
 function ensureAccount(c, name, address, gstin) {
@@ -685,15 +769,23 @@ async function importOneInvoice(c, parsed, filename) {
 }
 
 export async function importInvoiceExcel(c, buf, filename = '') {
-  const parsed = await parseInvoiceWorkbook(buf, filename);
-  const list = Array.isArray(parsed) ? parsed : [parsed];
-  if (!list.length || !list[0].items || !list[0].items.length) throw vErr('No items found in Excel — check that the sheet has Description, Quantity, Rate, Amount columns and at least one item row.');
+  // v1.11.23: Use bulk parser — supports multi-sheet workbook where each sheet = one bill
+  const list = await parseInvoiceWorkbookBulk(buf, filename);
+  if (!list.length || !list[0].items || !list[0].items.length) throw vErr('No items found in Excel — check that each sheet has Description, Quantity, Rate, Amount columns and at least one item row. For multi-sheet: one bill per sheet. For single sheet: one row per item with same invoice_no.');
 
   const results = [];
+  const errors = [];
   for (const p of list) {
-    const one = await importOneInvoice(c, p, filename);
-    results.push(one);
+    try {
+      const one = await importOneInvoice(c, p, filename);
+      results.push(one);
+    } catch (e) {
+      errors.push(`Sheet ${p._sheet || p.invoice_no}: ${e.message}`);
+    }
   }
-  if (results.length === 1) return results[0];
-  return { parsed: list, vouchers: results.map(r => r.voucher), count: results.length };
+  if (!results.length) {
+    throw vErr(`No bills could be imported. Errors: ${errors.slice(0,5).join(' | ')}`);
+  }
+  if (results.length === 1) return { ...results[0], errors };
+  return { parsed: list, vouchers: results.map(r => r.voucher), count: results.length, errors };
 }

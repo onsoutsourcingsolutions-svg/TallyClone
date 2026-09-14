@@ -47,16 +47,17 @@ export function InvoiceImportScreen() {
         <div><div className="crumb">Data · Sales Invoice Excel</div><h1>Invoice Excel → Books + Print</h1></div>
       </div>
       <p className="muted" style={{ marginTop: -6, fontSize: 13.5 }}>
-        Keep your Excel exactly as you use it today. Upload your <b>PI-200 style</b> sheet — same format as <code>PI-200-REFTECH.pdf</code> — and the software will:
-        <b> 1) create the party ledger if missing, 2) create stock items if missing, 3) post a Sales voucher with CGST/SGST or IGST auto, 4) let you print the exact PI-200 layout</b>.
-        Your Excel file is never modified. Works with .xlsx, .xls and .csv. Both your formatted invoice sheet and a simple tabular sheet are supported.
+        <b style={{ color: 'var(--gold-hi)' }}>NEW v1.11.23 — Multi-sheet support:</b> If you have <b>ONE Excel file with ALL previous bills in different sheets</b> (each sheet = one bill), just upload it — all sheets will be auto-detected and booked automatically in <b>DD/MM/YYYY chrono order</b>. 
+        Also works with single sheet PI-200 style (<code>PI-200-REFTECH.pdf</code>) — will: <b>1) create party ledger if missing, 2) create stock items if missing, 3) post Sales voucher with CGST/SGST or IGST auto, 4) let you print exact PI-200 layout</b>.
+        Your Excel file is never modified. Works with .xlsx, .xls and .csv. Tabular (invoice_no, date DD/MM/YYYY, buyer_name, item_name, qty, rate) also supported.
       </p>
 
-      <div className="card">
-        <h3>📂 Upload your invoice Excel</h3>
+      <div className="card" style={{ borderLeft: '4px solid var(--gold)' }}>
+        <h3>📂 Upload your invoice Excel — Single file, all bills, multi-sheet</h3>
         <p className="muted" style={{ fontSize: 13, margin: '0 0 12px' }}>
-          The parser looks for labels like <b>Invoice No., Dated, Buyer Bill (Bill To), Description of Goods, Quantity, Rate, Amount, Taxable Value, Output SGST/CGST/IGST, Total</b>.
-          If your sheet is tabular (columns: invoice_no, date, buyer_name, buyer_gstin, item_name, hsn, qty, rate, gst_rate) it will also work — one row per item, same invoice_no for multiple items.
+          <b>Multi-sheet workbook:</b> One Excel file where <b>each sheet is one bill</b> (e.g. Sheet1=Bill 001, Sheet2=Bill 002, ...). Upload once → all sheets auto-booked in chrono order DD/MM/YYYY.<br/>
+          <b>Single sheet:</b> Parser looks for <b>Invoice No., Dated (DD/MM/YYYY), Buyer Bill (Bill To), Description of Goods, Quantity, Rate, Amount, Taxable Value, Output SGST/CGST/IGST, Total</b>.<br/>
+          <b>Tabular:</b> Columns <code>invoice_no, date DD/MM/YYYY, buyer_name, buyer_gstin, item_name, hsn, qty, rate, gst_rate</code> — one row per item, same invoice_no for multiple items → also supports bulk in one sheet grouped by invoice_no.
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <label className="btn" style={{ cursor: 'pointer' }}>
@@ -81,14 +82,15 @@ export function InvoiceImportScreen() {
       {preview && preview.bulk && (
         <div className="card">
           <h3>Preview — {preview.count} invoices found in Excel (tabular bulk)</h3>
-          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 400, overflowY: 'auto' }}>
             <table className="grid" style={{ fontSize: 12 }}>
-              <thead><tr><th>Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Buyer</th><th>GSTIN</th><th>Items</th><th>Regime</th></tr></thead>
+              <thead><tr><th>Sheet / Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Buyer</th><th>GSTIN</th><th>Items</th><th>Regime</th></tr></thead>
               <tbody>{preview.bulk.map((p, i) => (
-                <tr key={i}><td>{p.invoice_no}</td><td>{ddMMyyyy(p.date)}</td><td>{p.buyer.name}</td><td>{p.buyer.gstin || '—'}</td><td>{p.items.length}</td><td>{p.regime}</td></tr>
+                <tr key={i}><td>{p._sheet ? `${p._sheet} → ${p.invoice_no}` : p.invoice_no}</td><td>{ddMMyyyy(p.date)}</td><td>{p.buyer.name}</td><td>{p.buyer.gstin || '—'}</td><td>{p.items.length}</td><td>{p.regime}</td></tr>
               ))}</tbody>
             </table>
           </div>
+          <div className="faint" style={{ fontSize: 11, marginTop: 6 }}>Detected {preview.count} bills across all sheets — sorted chrono DD/MM/YYYY. Click Book all to import.</div>
           <div style={{ marginTop: 12 }}>
             <button className="btn" disabled={busy || !file} onClick={() => doUpload(file, false)}>{busy ? 'Booking…' : `✔ Book all ${preview.count} invoices now`}</button>
           </div>
@@ -146,14 +148,23 @@ export function InvoiceImportScreen() {
 
       {result && result.vouchers && (
         <div className="card" style={{ borderColor: 'var(--gold)' }}>
-          <h3>✅ {result.count} invoices booked from Excel</h3>
-          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+          <h3>✅ {result.count} invoices booked from Excel (multi-sheet)</h3>
+          <div style={{ maxHeight: 320, overflowY: 'auto' }}>
             <table className="grid" style={{ fontSize: 12 }}>
               <thead><tr><th>Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Voucher ID</th><th></th></tr></thead>
               <tbody>{result.vouchers.map((v, i) => (
                 <tr key={i}><td>{v.number || '#' + v.voucher_no}</td><td>{ddMMyyyy(v.date)}</td><td>{v.id}</td><td><button className="btn ghost sm" onClick={() => printVoucher(v.id)}>🖨 Print</button></td></tr>
               ))}</tbody>
             </table>
+          </div>
+          {result.errors && result.errors.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div className="faint" style={{ fontSize: 11 }}>Some sheets had errors (skipped):</div>
+              {result.errors.slice(0,10).map((e,i)=><div key={i} className="errbox" style={{ fontSize: 11, marginTop: 4 }}>{e}</div>)}
+            </div>
+          )}
+          <div style={{ marginTop: 10 }}>
+            <span className="faint" style={{ fontSize: 12 }}>All bills added automatically — check Day Book (sorted DD/MM/YYYY chrono) or Reports → GST.</span>
           </div>
         </div>
       )}
