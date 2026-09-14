@@ -819,7 +819,6 @@ const PKG_URLS_SMALL = [
 ].filter(Boolean);
 const PKG_URLS = [...PKG_URLS_FULL, ...PKG_URLS_SMALL];
 const PKG_URL = PKG_URLS[0];
-const PKG_URL = PKG_URLS[0];
 const TAG_URLS = [
   process.env.ONS_UPDATE_VERSION_URL,
   'https://cdn.jsdelivr.net/gh/onsoutsourcingsolutions-svg/TallyClone@arena/01a0827e-tallyclone/version.js',
