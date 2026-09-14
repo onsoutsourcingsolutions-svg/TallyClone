@@ -110,20 +110,61 @@ function Shell() {
   const vv = (typeof view === 'string' ? { name: view } : view) || { name: 'gateway' };
   const nav = (v) => { setView(v); setMenuOpen(false); window.scrollTo(0, 0); };
 
-  // Clicking the logo always lands you on the newest build:
-  // new version exists -> install it (app restarts itself); otherwise -> reload.
+  // Clicking the logo always lands you on the newest build — v1.11.36: AUTOMATICALLY CLEARS ALL CACHES so STILL NOT UPDATE never repeats
+  // User: MAKE SURE THAT EVERYTIME I CLICK ON THE LOGO TO UPDATE THE PREVIOUS CACHE IS AUTOMATICALLY CLEARED
   const logoClick = async () => {
     setMenuOpen(false);
-    notify('Checking for a newer build…');
+    try {
+      // 1. Clear browser caches automatically — no manual Ctrl+F5 needed
+      if ('caches' in window) {
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+          console.log('[logoClick] Cleared CacheStorage', keys);
+        } catch (_) {}
+      }
+      // 2. Clear localStorage/sessionStorage update-related keys (keep company data)
+      try {
+        // Don't clear all localStorage (might have app state), just update cache markers
+        localStorage.removeItem('ons_update_check');
+        sessionStorage.clear();
+      } catch (_) {}
+      // 3. Clear service worker if any
+      if ('serviceWorker' in navigator) {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) { /* don't unregister, just update */ r.update(); }
+        } catch (_) {}
+      }
+    } catch (_) {}
+    notify('Clearing cache & checking for a newer build from GitHub/jsDelivr CDN (force, no cache)…');
     let j = null;
-    try { j = await checkUpdate(true); } catch (_) { j = null; }
-    if (!j) { notify('No internet — could not check. Reloading the page…'); window.location.reload(); return; }
+    try { 
+      // force=1 bypasses server _updCheckCache (5 sec) and picks newest across jsDelivr+raw+github
+      j = await checkUpdate(true); 
+    } catch (_) { j = null; }
+    if (!j) { 
+      notify('No internet — could not check. Hard reloading with cache clear…'); 
+      // Hard reload with cache clear
+      try { window.location.reload(true); } catch (_) { window.location.reload(); }
+      return; 
+    }
     if (j.update && j.latest) {
-      notify('New build ' + String(j.latest).replace(/ ·.*/, '') + ' found — installing now…');
+      notify('New build ' + String(j.latest).replace(/ ·.*/, '') + ' found — cache cleared, installing now from GitHub (30MB FULL, black gold)...');
       try { await applyUpdate(); } catch (e) { notify(e.message); }
     } else {
-      notify('You are on the newest build — reloading…');
-      window.location.reload();
+      notify('You are on the newest build ' + String(j.current).replace(/ ·.*/, '') + ' — cache cleared, hard reloading…');
+      // Force hard reload to ensure new build shows, not cached old JS
+      setTimeout(() => {
+        try {
+          // Add timestamp to bust browser cache
+          const url = new URL(window.location.href);
+          url.searchParams.set('t', Date.now().toString());
+          window.location.href = url.toString();
+        } catch (_) {
+          window.location.reload();
+        }
+      }, 800);
     }
   };
 

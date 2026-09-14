@@ -877,7 +877,9 @@ async function remoteBuildTag() {
 
 let _updCheckCache = null; // { at, body }
 api.get('/update/check', async (req, res) => {
-  const force = String(req.query.force||'') === '1' || String(req.query.t||'').includes('force');
+  const force = String(req.query.force||'') === '1' || String(req.query.t||'').includes('force') || String(req.query.t||'').length > 15;
+  // v1.11.36: AUTOMATICALLY CLEAR PREVIOUS CACHE when logo clicked — user: MAKE SURE THAT EVERYTIME I CLICK ON THE LOGO TO UPDATE THE PREVIOUS CACHE IS AUTOMATICALLY CLEARED
+  if (force) _updCheckCache = null;
   // v1.11.31: reduced cache to 5 sec, force=1 bypasses cache — user STILL NOT UPDATE on v1.11.27 due to raw cache
   if (!force && _updCheckCache && Date.now() - _updCheckCache.at < 5000) return ok(res, _updCheckCache.body);
   const cur = semverOf(BUILD_TAG);
