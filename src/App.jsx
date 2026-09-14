@@ -103,12 +103,36 @@ function Sidebar({ view, setView, onNav, company, open, onLogo }) {
 }
 
 function Shell() {
-  const { boot, company, view, setView, setCompany, notify } = useApp();
+  const { boot, company, view, setView, goBack, setCompany, notify } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   // A view may arrive as an object {name} or as a bare name string — normalize
   // so the screen switch below can never miss a screen (blank content bug).
   const vv = (typeof view === 'string' ? { name: view } : view) || { name: 'gateway' };
   const nav = (v) => { setView(v); setMenuOpen(false); window.scrollTo(0, 0); };
+
+  // v1.11.44: ESC anywhere goes back (Tally-like) — closes menu first, then modals handled separately, then navigates back
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      // If typing in input/textarea/select, don't go back on first ESC? Tally ESC goes back even from fields, but we should not if user is editing? We'll allow ESC to go back unless modal open
+      // Check if any portal (modal) is open — let modal handle ESC itself (modal has its own ESC listener)
+      const portals = document.querySelectorAll('.portal');
+      if (portals.length > 0) {
+        // Don't navigate, modal's ESC will close it
+        return;
+      }
+      if (menuOpen) {
+        setMenuOpen(false);
+        e.preventDefault();
+        return;
+      }
+      // Go back to previous view or gateway
+      const did = goBack();
+      if (did) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen, goBack]);
 
   // Clicking the logo always lands you on the newest build — v1.11.36: AUTOMATICALLY CLEARS ALL CACHES so STILL NOT UPDATE never repeats
   // User: MAKE SURE THAT EVERYTIME I CLICK ON THE LOGO TO UPDATE THE PREVIOUS CACHE IS AUTOMATICALLY CLEARED

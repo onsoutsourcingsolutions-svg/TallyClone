@@ -1,5 +1,5 @@
 // tiny client API helper + shared state
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
 
 export async function api(path, { body, method } = {}) {
   const res = await fetch('/api' + path, {
@@ -21,7 +21,8 @@ export function AppProvider({ children }) {
   const [company, setCompany] = useState(null); // company + extras + chart
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
-  const [view, setView] = useState({ name: 'gateway' });
+  const [view, setViewRaw] = useState({ name: 'gateway' });
+  const historyRef = useRef([]);
 
   const notify = useCallback((msg) => {
     setToast(msg);
@@ -52,6 +53,46 @@ export function AppProvider({ children }) {
     })();
   }, [refreshBoot, refreshCompany, notify]);
 
-  const value = { boot, setBoot, company, setCompany, busy, setBusy, toast, notify, view, setView, refreshBoot, refreshCompany };
+  // v1.11.44: ESC goes back — history stack + goBack
+  const setView = useCallback((next) => {
+    const n = typeof next === 'string' ? { name: next } : next;
+    const cur = view;
+    // Don't push duplicate or gateway->gateway
+    if (JSON.stringify(cur) !== JSON.stringify(n)) {
+      // Keep max 20 history
+      historyRef.current = [...historyRef.current.slice(-19), cur];
+    }
+    setViewRaw(n);
+    window.scrollTo(0, 0);
+  }, [view]);
+
+  const goBack = useCallback(() => {
+    // If modal open (portal), let modal ESC handle first — check if any .portal exists
+    const portals = document.querySelectorAll('.portal');
+    if (portals.length > 0) {
+      // Let modal's own ESC handler close it — dispatch ESC to close buttons? We close via clicking close if needed
+      // Find close buttons inside portal and click first? Better to dispatch custom event that modals listen to
+      // For now, if portal exists, don't navigate — modals will handle ESC themselves
+      // But as fallback, close by removing portal? We rely on modals' own ESC listeners
+      return false; // indicates modal might be open, don't navigate yet
+    }
+    const hist = historyRef.current;
+    if (hist.length > 0) {
+      const prev = hist[hist.length - 1];
+      historyRef.current = hist.slice(0, -1);
+      setViewRaw(prev);
+      window.scrollTo(0, 0);
+      return true;
+    }
+    // No history, go to gateway
+    if (view.name !== 'gateway') {
+      setViewRaw({ name: 'gateway' });
+      window.scrollTo(0, 0);
+      return true;
+    }
+    return false;
+  }, [view]);
+
+  const value = { boot, setBoot, company, setCompany, busy, setBusy, toast, notify, view, setView, goBack, refreshBoot, refreshCompany };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

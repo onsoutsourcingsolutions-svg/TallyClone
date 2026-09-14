@@ -12,11 +12,16 @@ const cmeta = (cls) => CLASSES[cls] || { label: cls };
 
 /* ---------- modal ---------- */
 export function Modal({ onClose, children, wide }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
     <div className="portal" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="box" style={{ borderColor: 'var(--gold)', maxWidth: wide ? 1000 : 680, width: '100%' }}>
         <div style={{ textAlign: 'right', marginBottom: 6 }} className="no-print">
-          <button className="btn ghost sm" onClick={onClose}>✕ Close</button>
+          <button className="btn ghost sm" onClick={onClose}>✕ Close (Esc)</button>
         </div>
         {children}
       </div>

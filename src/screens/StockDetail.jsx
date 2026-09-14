@@ -29,6 +29,13 @@ export function StockDetailModal({ itemId, itemName, onClose, onVoucher }) {
     return () => { alive = false; };
   }, [itemId]);
 
+  // ESC closes modal — v1.11.44
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   if (loading) {
     return (
       <div className="portal" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
