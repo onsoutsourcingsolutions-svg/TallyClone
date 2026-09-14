@@ -376,9 +376,93 @@ export async function verifyGSTINWithCaptcha(gstin, captcha, opts = {}) {
 
 // Fallback attempt using free public APIs (no captcha) — best effort
 // These are tried before captcha flow, and also when captcha fails
-async function fetchGSTDetailsFallback(gstin) {
+// These give automatic fill like Tally (Tally is a GSP with official API access)
+async function fetchGSTDetailsFallback(gstin, opts = {}) {
+  // Get custom API keys from env or from Settings (for Tally-like auto-fill without captcha)
+  const customKeys = {
+    gstinapi: opts.apiKey || process.env.GSTINAPI_KEY || process.env.GST_API_KEY || '',
+    appyflow: opts.provider === 'appyflow' ? opts.apiKey : (process.env.APPYFLOW_KEY || ''),
+    gstincheck: opts.provider === 'gstincheck' ? opts.apiKey : '',
+    provider: opts.provider || 'auto'
+  };
+  // If provider is specific, only use that key
+  if (customKeys.provider !== 'auto' && opts.apiKey) {
+    if (customKeys.provider === 'gstinapi') customKeys.gstinapi = opts.apiKey;
+    if (customKeys.provider === 'appyflow') customKeys.appyflow = opts.apiKey;
+    if (customKeys.provider === 'gstincheck') customKeys.gstincheck = opts.apiKey;
+  }
+
   const attempts = [
-    // Try GSTZen / free proxy APIs
+    // Method 1: Try with custom gstinapi.in key if provided (100 free lookups, no captcha like Tally)
+    async () => {
+      if (!customKeys.gstinapi) throw new Error('no gstinapi key');
+      const r = await fetchWithTimeout(`https://www.gstinapi.in/v1/gstin/${gstin}`, {
+        headers: { 'x-api-key': customKeys.gstinapi, 'Accept': 'application/json' }
+      }, 8000);
+      if (!r.ok) throw new Error('gstinapi http ' + r.status);
+      const j = await r.json();
+      if (j && (j.legal_name || j.trade_name || j.gstin)) {
+        return {
+          legal_name: j.legal_name || j.lgnm || '',
+          trade_name: j.trade_name || j.tradeNam || j.legal_name || '',
+          address: j.address || j.addr || '',
+          status: j.status || j.sts || '',
+          registration_date: j.registration_date || j.rgdt || '',
+          pincode: j.pincode || '',
+          taxpayer_type: j.taxpayer_type || j.dty || '',
+          source: 'gstinapi',
+          raw: j
+        };
+      }
+      throw new Error('no data');
+    },
+    // Method 2: Try AppyFlow with key if provided (50 free, no captcha)
+    async () => {
+      if (!customKeys.appyflow) throw new Error('no appyflow key');
+      const r = await fetchWithTimeout(`https://appyflow.in/api/verifyGST?gstNo=${gstin}&key_secret=${customKeys.appyflow}`, {
+        headers: { 'Accept': 'application/json' }
+      }, 8000);
+      if (!r.ok) throw new Error('appyflow http ' + r.status);
+      const j = await r.json();
+      const info = j.taxpayerInfo || j.data || j;
+      if (info && (info.lgnm || info.tradeNam || info.legal_name)) {
+        const pradr = info.pradr || {};
+        const addr = pradr.addr ? `${pradr.addr.bno||''} ${pradr.addr.st||''} ${pradr.addr.loc||''} ${pradr.addr.dst||''} ${pradr.addr.stcd||''} ${pradr.addr.pncd||''}` : (info.address || '');
+        return {
+          legal_name: info.lgnm || info.legal_name || '',
+          trade_name: info.tradeNam || info.trade_name || info.lgnm || '',
+          address: addr || '',
+          status: info.sts || info.status || '',
+          registration_date: info.rgdt || '',
+          source: 'appyflow',
+          raw: j
+        };
+      }
+      throw new Error('no data');
+    },
+    // Method 2b: Try gstincheck.co.in with key (20 free, no captcha like Tally)
+    async () => {
+      if (!customKeys.gstincheck) throw new Error('no gstincheck key');
+      const r = await fetchWithTimeout(`https://sheet.gstincheck.co.in/check/${customKeys.gstincheck}/${gstin}`, {
+        headers: { 'Accept': 'application/json' }
+      }, 8000);
+      if (!r.ok) throw new Error('gstincheck http ' + r.status);
+      const j = await r.json();
+      const d = j.data || j;
+      if (d && (d.legal_name || d.trade_name || d.lgnm || d.tradeNam)) {
+        return {
+          legal_name: d.legal_name || d.lgnm || '',
+          trade_name: d.trade_name || d.tradeNam || d.legal_name || '',
+          address: d.address || d.addr || d.pradr?.adr || '',
+          status: d.status || d.sts || '',
+          registration_date: d.registration_date || d.rgdt || '',
+          source: 'gstincheck',
+          raw: j
+        };
+      }
+      throw new Error('no data');
+    },
+    // Method 3: Try GSTZen public (sometimes works without key)
     async () => {
       const r = await fetchWithTimeout(`https://api.gstzen.in/api/gstin/${gstin}`, {
         headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
@@ -394,11 +478,13 @@ async function fetchGSTDetailsFallback(gstin) {
           status: d.status || d.sts || '',
           registration_date: d.registration_date || d.rgdt || '',
           pincode: d.pincode || d.pradr?.pncd || '',
+          source: 'gstzen',
           raw: j
         };
       }
       throw new Error('no data');
     },
+    // Method 4: Try Masters India public endpoint
     async () => {
       const r = await fetchWithTimeout(`https://commonapi.mastersindia.co/api/v1/saas/gstin/${gstin}`, {
         headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
@@ -413,11 +499,13 @@ async function fetchGSTDetailsFallback(gstin) {
           address: d.pradr?.adr || d.address || '',
           status: d.sts || d.status || '',
           registration_date: d.rgdt || '',
+          source: 'mastersindia',
           raw: j
         };
       }
       throw new Error('no data');
     },
+    // Method 5: Try ezyGST
     async () => {
       const r = await fetchWithTimeout(`https://api.ezygst.in/api/gstin/${gstin}`, {
         headers: { 'User-Agent': 'Mozilla/5.0' }
@@ -436,8 +524,37 @@ async function fetchGSTDetailsFallback(gstin) {
         };
       }
       throw new Error('no data');
+    },
+    // Method 6: Try GST Search public site scrape (no captcha)
+    async () => {
+      const r = await fetchWithTimeout(`https://www.gstsearch.in/api/gstin/${gstin}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+      }, 6000);
+      if (!r.ok) throw new Error('gstsearch http ' + r.status);
+      const j = await r.json();
+      if (j && (j.legalName || j.tradeName || j.data)) {
+        const d = j.data || j;
+        return {
+          legal_name: d.legalName || d.lgnm || '',
+          trade_name: d.tradeName || d.tradeNam || d.legalName || '',
+          address: d.address || '',
+          status: d.status || '',
+          raw: j
+        };
+      }
+      throw new Error('no data');
     }
   ];
+  
+  // Try all methods in parallel for speed, return first success
+  const results = await Promise.allSettled(attempts.map(fn => fn()));
+  for (const res of results) {
+    if (res.status === 'fulfilled' && res.value && (res.value.legal_name || res.value.trade_name)) {
+      return res.value;
+    }
+  }
+  
+  // If parallel failed, try sequential with more logging
   for (const fn of attempts) {
     try {
       const data = await fn();
@@ -449,7 +566,7 @@ async function fetchGSTDetailsFallback(gstin) {
   return null;
 }
 
-export async function verifyGSTIN(gstin) {
+export async function verifyGSTIN(gstin, opts = {}) {
   const v = validateGSTIN(gstin);
   if (!v.valid) return { ...v, verified: false, details: null };
 
@@ -460,12 +577,12 @@ export async function verifyGSTIN(gstin) {
 
   // Try fallback free APIs first (no captcha needed) — if they work, return live data
   try {
-    const details = await fetchGSTDetailsFallback(v.gstin);
+    const details = await fetchGSTDetailsFallback(v.gstin, opts);
     if (details) {
       _cache.set(v.gstin, { at: Date.now(), data: details });
       return { ...v, verified: true, details, cached: false };
     }
-  } catch (_) {}
+  } catch (e) { console.warn("GST fallback error:", e.message); }
 
   // No live data, but GSTIN itself is valid — return offline parsed info
   // This is still usable - user can save ledger, live fetch is optional enhancement
@@ -475,7 +592,7 @@ export async function verifyGSTIN(gstin) {
     details: null,
     needs_captcha: true,
     offline_valid: true,
-    message: `GSTIN ✓ Valid — ${v.state_name} (${v.state_code}) · PAN ${v.pan} · Format and checksum verified. Live details from GST portal require captcha (click "Get Captcha & Fetch Live" if portal reachable). You can still save ledger with this GSTIN — offline validation is sufficient for books.`
+    message: `GSTIN ✓ Valid — ${v.state_name} (${v.state_code}) · PAN ${v.pan} · Format and checksum verified. ${opts.apiKey ? "API key provided but live fetch failed — check key or try captcha." : "For Tally-like auto-fill without captcha, add free API key in Settings → GST auto-fill (gstinapi.in 100 free). Or click \"Get Captcha & Fetch Live\" if portal reachable."} You can still save ledger — offline validation is sufficient.`
   };
 }
 

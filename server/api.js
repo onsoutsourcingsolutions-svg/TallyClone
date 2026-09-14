@@ -123,7 +123,7 @@ api.patch('/company', (req, res) => {
     if (sets.length) { params.push(c.id); db.prepare(`UPDATE companies SET ${sets.join(', ')} WHERE id = ?`).run(...params); }
     if (b.extras && typeof b.extras === 'object') {
       const ex = { ...companyExtras(c), ...b.extras };
-      const allowedEx = ['auto_tax', 'tax_regime_default', 'invoice_prefix'];
+      const allowedEx = ['auto_tax', 'tax_regime_default', 'invoice_prefix', 'gst_api_key', 'gst_api_provider'];
       const next = {};
       for (const k of allowedEx) if (ex[k] !== undefined) next[k] = ex[k];
       saveCompanyExtras(c.id, { ...companyExtras(c), ...next });
@@ -470,14 +470,28 @@ api.get('/rates', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
-// ---------- GSTIN verification & auto-pull (with live captcha flow) ----------
+// ---------- GSTIN verification & auto-pull (with live captcha flow + GSP auto) ----------
 import { getGSTCaptcha, verifyGSTINWithCaptcha } from './gst.js';
 
 api.get('/gst/verify', async (req, res) => {
   try {
     const gstin = String(req.query.gstin || '').trim().toUpperCase();
     if (!gstin) throw new Error('GSTIN is required - e.g. 27ABCDE1234F1Z5');
-    const result = await verifyGSTIN(gstin);
+    // Try to get API key from company extras if available (for Tally-like auto-fill)
+    let apiKey = '';
+    let provider = 'auto';
+    try {
+      const c = getCompany(activeCompanyId());
+      if (c) {
+        const ex = companyExtras(c);
+        apiKey = ex.gst_api_key || '';
+        provider = ex.gst_api_provider || 'auto';
+      }
+    } catch (_) {}
+    // Also allow query param override
+    if (req.query.api_key) apiKey = String(req.query.api_key);
+    if (req.query.provider) provider = String(req.query.provider);
+    const result = await verifyGSTIN(gstin, { apiKey, provider });
     ok(res, result);
   } catch (e) { fail(res, e); }
 });

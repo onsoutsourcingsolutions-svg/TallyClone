@@ -31,6 +31,8 @@ export function SettingsScreen() {
       regime: (company.extras && company.extras.tax_regime_default) || 'intra',
       financial_year_from: company.financial_year_from,
       books_begin_from: company.books_begin_from,
+      gst_api_key: (company.extras && company.extras.gst_api_key) || '',
+      gst_api_provider: (company.extras && company.extras.gst_api_provider) || 'auto',
     });
   }, [company]);
   if (!company) return null;
@@ -72,7 +74,7 @@ export function SettingsScreen() {
     try {
       await api('/company', { method: 'PATCH', body: {
         ...f, state_code: STATE_CODES[f.state] || company.state_code,
-        extras: { auto_tax: f.auto_tax, tax_regime_default: f.regime },
+        extras: { auto_tax: f.auto_tax, tax_regime_default: f.regime, gst_api_key: f.gst_api_key, gst_api_provider: f.gst_api_provider },
       } });
       const j = await api('/company');
       setCompany({ ...j.company, extras: j.extras, fy_end: j.fy_end, chart: j.chart });
@@ -141,6 +143,35 @@ export function SettingsScreen() {
         <div style={{ marginTop: 10 }}>
           <button className="btn" onClick={save}>Save settings</button>
           {saved && <span className="badge gold" style={{ marginLeft: 10 }}>saved</span>}
+        </div>
+      </div>
+      <div className="card" style={{ borderLeft: '4px solid var(--gold)' }}>
+        <h3>🔑 GST auto-fill — like Tally (no captcha)</h3>
+        <p className="muted" style={{ margin: '0 0 10px', fontSize: 13 }}>
+          Tally is a registered GSP (you saw the list: Tally, Zoho, Masters India, ClearTax) so it fetches GSTIN without captcha via official GSTN API.
+          You can get same automatic fill here by adding a free GSP API key — 100% automatic, no captcha.
+        </p>
+        <div className="frow">
+          <label className="f"><span>Provider (for Tally-like auto-fill)</span>
+            <select value={f.gst_api_provider} onChange={set('gst_api_provider')}>
+              <option value="auto">Auto — try free APIs first (no key)</option>
+              <option value="gstinapi">gstinapi.in — 100 free, no card</option>
+              <option value="appyflow">appyflow.in — 50 free</option>
+              <option value="gstincheck">gstincheck.co.in — 20 free</option>
+            </select>
+          </label>
+          <label className="f"><span>API Key (optional — for auto-fill without captcha)</span>
+            <input value={f.gst_api_key} onChange={set('gst_api_key')} placeholder="gak_... or key_secret" style={{ fontFamily: 'var(--mono)', fontSize: 12 }} />
+          </label>
+        </div>
+        <div className="faint" style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.6 }}>
+          <b>How to get free key (Tally-like):</b><br/>
+          1. <b>gstinapi.in</b> → Register → API Keys → Copy <code>gak_...</code> → paste → Save → Now Verify auto-fills without captcha<br/>
+          2. <b>appyflow.in/verify-gst</b> → Fill form → key_secret → paste<br/>
+          Without key: app tries free public APIs + GST portal captcha. If captcha fails, offline (state+PAN) still valid.
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button className="btn" onClick={save}>Save GST API settings</button>
         </div>
       </div>
       <div className="card">
