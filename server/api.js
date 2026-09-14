@@ -349,11 +349,49 @@ const fileUpload = multer({
   },
 });
 
+// ---- SPECIFIC routes MUST come BEFORE generic :kind routes (otherwise Express matches :kind = invoice_excel and throws Unknown import kind) ----
+// ---- sales invoice Excel import (keeps user's Excel format, books + prints) — v1.11.24 multi-sheet + stock live ----
+api.post('/import/invoice_excel', fileUpload.single('file'), async (req, res) => {
+  const c = companyOr(res);
+  if (!c) return;
+  try {
+    if (!req.file) throw new Error('No file received - choose an .xlsx / .csv file first.');
+    const isPreview = String(req.body.preview) === '1';
+    if (isPreview) {
+      const { parseInvoiceWorkbookBulk } = await import('./invoiceExcel.js');
+      const bulk = await parseInvoiceWorkbookBulk(req.file.buffer, req.file.originalname);
+      if (bulk.length > 1) {
+        return ok(res, { preview: true, bulk, count: bulk.length, filename: req.file.originalname });
+      }
+      const parsed = bulk[0] || await parseInvoiceWorkbook(req.file.buffer, req.file.originalname);
+      return ok(res, { preview: true, parsed, filename: req.file.originalname });
+    }
+    const out = await importInvoiceExcel(c, req.file.buffer, req.file.originalname);
+    if (out.vouchers) {
+      return ok(res, { ok: true, vouchers: out.vouchers, count: out.count, errors: out.errors, message: `${out.count} sales invoices booked from Excel ✓` });
+    }
+    ok(res, { ok: true, voucher: out.voucher, parsed: out.parsed, errors: out.errors || [], message: `Sales ${out.voucher.number || '#' + out.voucher.voucher_no} booked ✓` });
+  } catch (e) { fail(res, e); }
+});
+
+api.get('/export/invoice_excel_template', async (req, res) => {
+  const c = companyOr(res);
+  if (!c) return;
+  try {
+    const { exportInvoiceTemplate } = await import('./invoiceExcel.js');
+    const out = await exportInvoiceTemplate(c);
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+
+// ---- generic import/export (ledgers, items, stock, vouchers) ----
 api.get('/export/:kind', async (req, res) => {
   const c = companyOr(res);
   if (!c) return;
   const kind = req.params.kind;
-  if (!DATA_KINDS.has(kind)) return fail(res, new Error('Unknown export kind.'));
+  if (!DATA_KINDS.has(kind)) return fail(res, new Error('Unknown import kind.'));
   try {
     const m = req.query.mode;
     const out = m === 'template' ? await exportKindTemplate(kind, c)
@@ -380,42 +418,6 @@ api.post('/import/:kind', fileUpload.single('file'), async (req, res) => {
     }
     const result = importKind(kind, c, rows, { mode, date: req.body.date || undefined, counterpart_id: req.body.counterpart_id || undefined });
     ok(res, result);
-  } catch (e) { fail(res, e); }
-});
-
-// ---- sales invoice Excel import (keeps user's Excel format, books + prints) ----
-api.post('/import/invoice_excel', fileUpload.single('file'), async (req, res) => {
-  const c = companyOr(res);
-  if (!c) return;
-  try {
-    if (!req.file) throw new Error('No file received - choose an .xlsx / .csv file first.');
-    const isPreview = String(req.body.preview) === '1';
-    if (isPreview) {
-      const { parseInvoiceWorkbookBulk } = await import('./invoiceExcel.js');
-      const bulk = await parseInvoiceWorkbookBulk(req.file.buffer, req.file.originalname);
-      if (bulk.length > 1) {
-        return ok(res, { preview: true, bulk, count: bulk.length, filename: req.file.originalname });
-      }
-      const parsed = bulk[0] || await parseInvoiceWorkbook(req.file.buffer, req.file.originalname);
-      return ok(res, { preview: true, parsed, filename: req.file.originalname });
-    }
-    const out = await importInvoiceExcel(c, req.file.buffer, req.file.originalname);
-    if (out.vouchers) {
-      return ok(res, { ok: true, vouchers: out.vouchers, count: out.count, message: `${out.count} sales invoices booked from Excel ✓` });
-    }
-    ok(res, { ok: true, voucher: out.voucher, parsed: out.parsed, message: `Sales ${out.voucher.number || '#' + out.voucher.voucher_no} booked ✓` });
-  } catch (e) { fail(res, e); }
-});
-
-api.get('/export/invoice_excel_template', async (req, res) => {
-  const c = companyOr(res);
-  if (!c) return;
-  try {
-    const { exportInvoiceTemplate } = await import('./invoiceExcel.js');
-    const out = await exportInvoiceTemplate(c);
-    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
-    res.send(out.buf);
   } catch (e) { fail(res, e); }
 });
 
