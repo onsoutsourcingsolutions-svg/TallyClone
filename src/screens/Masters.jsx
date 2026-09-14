@@ -24,7 +24,23 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
     bank_name: '', ifsc: '', account_no: '',
     ...(edit || {}),
   });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const set = (k) => (e) => {
+    const val = e.target.value;
+    // Auto-fill PAN as soon as GSTIN is typed (15 chars)
+    if (k === 'gstin') {
+      const g = String(val).toUpperCase().replace(/\s+/g, '');
+      if (g.length >= 12) {
+        const pan = g.slice(2, 12);
+        if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+          setF(prev => ({ ...prev, gstin: val.toUpperCase(), pan }));
+          return;
+        }
+      }
+      setF(prev => ({ ...prev, gstin: val.toUpperCase() }));
+      return;
+    }
+    setF({ ...f, [k]: e.target.value });
+  };
   const groups = useMemo(() => {
     const secs = [];
     const order = ['shareholders_funds', 'noncurrent_liab', 'current_liab', 'noncurrent_assets', 'current_assets', 'direct_income', 'indirect_income', 'direct_expense', 'indirect_expense', 'tax_expense'];
@@ -40,23 +56,36 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
   const verifyGst = async () => {
     const g = String(f.gstin || '').trim().toUpperCase();
     if (!g) { setErr('Enter GSTIN first — e.g. 27ABCDE1234F1Z5'); return; }
+    // Immediately auto-fill PAN from GSTIN (chars 2-12)
+    if (g.length >= 12) {
+      const panFromGstin = g.slice(2, 12);
+      if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panFromGstin)) {
+        setF(prev => ({ ...prev, pan: panFromGstin }));
+      }
+    }
     setGstState({ loading: true, data: null, error: '' });
     setErr('');
     try {
       const j = await api('/gst/verify?gstin=' + encodeURIComponent(g));
       if (!j.ok) throw new Error(j.error || 'GST verification failed');
       setGstState({ loading: false, data: j, error: '' });
-      if (j.pan && !f.pan) setF(prev => ({ ...prev, pan: j.pan }));
+      // Always auto-fill PAN when verify clicked
+      if (j.pan) setF(prev => ({ ...prev, pan: j.pan }));
       if (j.details) {
         const d = j.details;
-        if (d.trade_name || d.legal_name) {
-          notify(`GSTIN ✓ ${j.state_name || ''} — ${d.trade_name || d.legal_name} found. Click to apply.`);
+        // Auto-fill name and address immediately when live details available
+        const updates = {};
+        if (d.trade_name || d.legal_name) updates.name = d.trade_name || d.legal_name;
+        if (d.address) updates.address = d.address;
+        if (j.pan) updates.pan = j.pan;
+        if (Object.keys(updates).length) {
+          setF(prev => ({ ...prev, ...updates }));
+          notify(`GSTIN ✓ ${j.state_name || ''} — ${d.trade_name || d.legal_name} auto-filled ✓`);
         } else {
           notify(`GSTIN ✓ ${j.state_name} — format valid${j.verified ? '' : ' (live details unavailable offline)'}`);
         }
       } else {
-        notify(`GSTIN ✓ ${j.state_name} — valid. ${j.message || ''}`);
-        // auto-fetch captcha if needs live
+        notify(`GSTIN ✓ ${j.state_name} — valid. PAN auto-filled ✓. ${j.message || ''}`);
         if (j.needs_captcha) fetchCaptcha();
       }
     } catch (e) {
@@ -105,16 +134,25 @@ export function LedgerForm({ onSaved, edit, onCancel }) {
       const j = await api('/gst/verify', { method: 'POST', body: { gstin: g, captcha: captcha.value.trim(), captcha_id: captcha.id } });
       if (!j.ok) throw new Error(j.error || 'GST verification with captcha failed');
       setGstState({ loading: false, data: j, error: '' });
-      if (j.pan && !f.pan) setF(prev => ({ ...prev, pan: j.pan }));
+      // Always auto-fill PAN + name + address after captcha success
+      if (j.pan) setF(prev => ({ ...prev, pan: j.pan }));
       if (j.details) {
         const d = j.details;
-        notify(`GSTIN Live ✓ ${d.trade_name || d.legal_name} — ${j.state_name} — fetched from GST portal`);
+        const updates = {};
+        if (d.trade_name || d.legal_name) updates.name = d.trade_name || d.legal_name;
+        if (d.address) updates.address = d.address;
+        if (j.pan) updates.pan = j.pan;
+        if (Object.keys(updates).length) {
+          setF(prev => ({ ...prev, ...updates }));
+          notify(`GSTIN Live ✓ ${d.trade_name || d.legal_name} — ${j.state_name} — auto-filled from GST portal ✓`);
+        } else {
+          notify(`GSTIN Live ✓ ${j.state_name} — fetched from GST portal`);
+        }
       }
       setCaptcha({ id: '', img: '', loading: false, value: '' });
     } catch (e) {
       setGstState({ loading: false, data: gstState.data, error: e.message });
       setErr(e.message);
-      // on invalid captcha, auto refresh
       if (/captcha/i.test(e.message)) fetchCaptcha();
     }
   };
