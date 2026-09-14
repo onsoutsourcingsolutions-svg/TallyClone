@@ -53,7 +53,12 @@ function BalanceSheetView() {
   return (
     <div>
       <div className="card">
-        <div className="frow"><label className="f"><span>As on</span><input type="date" value={asOn} onChange={(e) => setAsOn(e.target.value)} /></label></div>
+        <div className="frow" style={{ alignItems: 'flex-end' }}>
+          <label className="f"><span>As on</span><input type="date" value={asOn} onChange={(e) => setAsOn(e.target.value)} /></label>
+          <a className="btn ghost sm" href={`/api/export/balance-sheet?as_on=${asOn}`} download>⬇ Download Balance Sheet (Excel)</a>
+          <a className="btn ghost sm" href={`/api/export/trial-balance?as_on=${asOn}`} download>⬇ Trial Balance</a>
+          <a className="btn ghost sm" href="/api/export/dashboard" download>⬇ Dashboard</a>
+        </div>
       </div>
       {err && <div className="errbox">{err}</div>}
       {!err && data && (
@@ -119,7 +124,15 @@ function ProfitLossView() {
   const loss = data.netProfit < 0;
   return (
     <div>
-      <div className="card"><PeriodRow from={from} to={to} setFrom={setFrom} setTo={setTo} /></div>
+      <div className="card">
+        <PeriodRow from={from} to={to} setFrom={setFrom} setTo={setTo} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+          <a className="btn ghost sm" href={`/api/export/profit-loss?from=${from}&to=${to}`} download>⬇ Download P&L (Excel)</a>
+          <a className="btn ghost sm" href={`/api/export/sales?from=${from}&to=${to}`} download>⬇ Sales</a>
+          <a className="btn ghost sm" href={`/api/export/purchases?from=${from}&to=${to}`} download>⬇ Purchases</a>
+          <a className="btn ghost sm" href="/api/export/dashboard" download>⬇ Dashboard</a>
+        </div>
+      </div>
       {err && <div className="errbox">{err}</div>}
       {!err && (
         <div className="card">
@@ -165,7 +178,12 @@ function TrialBalanceView() {
   return (
     <div>
       <div className="card">
-        <div className="frow"><label className="f"><span>As on</span><input type="date" value={asOn} onChange={(e) => setAsOn(e.target.value)} /></label></div>
+        <div className="frow" style={{ alignItems: 'flex-end' }}>
+          <label className="f"><span>As on</span><input type="date" value={asOn} onChange={(e) => setAsOn(e.target.value)} /></label>
+          <a className="btn ghost sm" href={`/api/export/balance-sheet?as_on=${asOn}`} download>⬇ Download Balance Sheet (Excel)</a>
+          <a className="btn ghost sm" href={`/api/export/trial-balance?as_on=${asOn}`} download>⬇ Trial Balance</a>
+          <a className="btn ghost sm" href="/api/export/dashboard" download>⬇ Dashboard</a>
+        </div>
       </div>
       {err && <div className="errbox">{err}</div>}
       {!err && (
@@ -210,7 +228,7 @@ function LedgerView() {
   return (
     <div>
       <div className="card">
-        <div className="frow">
+        <div className="frow" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label className="f" style={{ minWidth: 240 }}><span>Ledger</span>
             <select value={accId} onChange={(e) => setAccId(e.target.value)}>
               <option value="">— choose ledger —</option>
@@ -219,6 +237,8 @@ function LedgerView() {
           </label>
           <label className="f"><span>From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
           <label className="f"><span>To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          {accId && <a className="btn ghost sm" href={`/api/export/ledger?account_id=${accId}&from=${from}&to=${to}`} download>⬇ Download Ledger (Excel)</a>}
+          <a className="btn ghost sm" href="/api/export/daybook?from=${from}&to=${to}" download>⬇ Day Book</a>
         </div>
       </div>
       {err && <div className="errbox">{err}</div>}
@@ -285,7 +305,7 @@ function StockView() {
   return (
     <div>
       <div className="card" style={{ borderLeft: '4px solid var(--gold)' }}>
-        <div className="frow">
+        <div className="frow" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label className="f" style={{ minWidth: 240 }}><span>Item — click 📜 for buy/sell vs party</span>
             <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
               <option value="">— choose item —</option>
@@ -295,8 +315,11 @@ function StockView() {
           <label className="f"><span>From (DD/MM/YYYY)</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
           <label className="f"><span>To (DD/MM/YYYY)</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
           {itemId && <button className="btn sm" style={{ alignSelf: 'flex-end' }} onClick={() => openFullHistory(itemId)}>📜 Full buy/sell history vs party</button>}
+          <a className="btn ghost sm" href={`/api/export/stock-summary?from=${from}&to=${to}`} download style={{ alignSelf: 'flex-end' }}>⬇ Download Stock (Excel)</a>
+          <a className="btn ghost sm" href={`/api/export/sales?from=${from}&to=${to}`} download style={{ alignSelf: 'flex-end' }}>⬇ Sales</a>
+          <a className="btn ghost sm" href="/api/export/dashboard" download style={{ alignSelf: 'flex-end' }}>⬇ Dashboard</a>
         </div>
-        <div className="faint" style={{ fontSize: 11, marginTop: 6 }}>NEW v1.11.24: Hover any row to see party GSTIN · Click voucher no. to view voucher · Click 📜 for full history: when bought, when sold, against which party, rate, balance — dynamically matched to stock in hand</div>
+        <div className="faint" style={{ fontSize: 11, marginTop: 6 }}>NEW v1.11.45: Download buttons everywhere — Sales 927956 mismatch? Download Sales Excel to verify Invoice vs Taxable. Hover any row to see party GSTIN · Click voucher no. to view voucher · Click 📜 for full history</div>
       </div>
       {err && <div className="errbox">{err}</div>}
       {fullErr && <div className="errbox">{fullErr}</div>}
@@ -399,7 +422,15 @@ function GstView() {
   const net = sumTax(out) + sumTax(inn);
   return (
     <div>
-      <div className="card"><PeriodRow from={from} to={to} setFrom={setFrom} setTo={setTo} /></div>
+      <div className="card">
+        <PeriodRow from={from} to={to} setFrom={setFrom} setTo={setTo} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+          <a className="btn ghost sm" href={`/api/export/profit-loss?from=${from}&to=${to}`} download>⬇ Download P&L (Excel)</a>
+          <a className="btn ghost sm" href={`/api/export/sales?from=${from}&to=${to}`} download>⬇ Sales</a>
+          <a className="btn ghost sm" href={`/api/export/purchases?from=${from}&to=${to}`} download>⬇ Purchases</a>
+          <a className="btn ghost sm" href="/api/export/dashboard" download>⬇ Dashboard</a>
+        </div>
+      </div>
       {err && <div className="errbox">{err}</div>}
       {!err && (
         <>
@@ -450,7 +481,12 @@ export function ReportsScreen({ which }) {
     <div>
       <div className="pagetitle">
         <div><div className="crumb">Reports</div><h1>{TITLES[which]}</h1></div>
-        <button className="btn ghost no-print" onClick={() => window.print()}>🖨 Print</button>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <a className="btn ghost sm no-print" href="/api/export/dashboard" download>⬇ Dashboard</a>
+          <a className="btn ghost sm no-print" href="/api/export/sales" download>⬇ Sales</a>
+          <a className="btn ghost sm no-print" href="/api/export/daybook" download>⬇ Day Book</a>
+          <button className="btn ghost sm no-print" onClick={() => window.print()}>🖨 Print</button>
+        </div>
       </div>
       {body}
     </div>

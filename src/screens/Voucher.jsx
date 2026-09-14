@@ -567,7 +567,14 @@ export function VoucherScreen({ cls }) {
         <StockJournalEditor key={(editing ? 'edit-' : 'new-') + cls} accounts={accounts} items={items || []} editing={editing} onSaved={() => load()} />
       )}
       <div className="card">
-        <h3>Recent {label}s</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <h3 style={{ margin: 0 }}>Recent {label}s</h3>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <a className="btn ghost sm" href={`/api/export/${cls === 'sales' ? 'sales' : cls === 'purchase' ? 'purchases' : cls === 'stock_journal' ? 'stock-summary' : 'daybook'}`} download>⬇ Download {label} (Excel)</a>
+            <a className="btn ghost sm" href="/api/export/daybook" download>⬇ Day Book</a>
+            <a className="btn ghost sm" href="/api/export/dashboard" download>⬇ Dashboard</a>
+          </div>
+        </div>
         {list === null && <div className="empty">Loading…</div>}
         {list && !list.length && <div className="empty">No {label} vouchers recorded yet.</div>}
         {list && list.length > 0 && (

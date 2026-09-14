@@ -390,6 +390,108 @@ api.get('/export/invoice_excel_template', async (req, res) => {
 });
 
 // ---- generic import/export (ledgers, items, stock, vouchers) ----
+// v1.11.45: Download buttons for ALL tabs wherever applicable — sales 927956 mismatch explained via detailed Excel
+api.get('/export/sales', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportSalesExcel } = await import('./reportExport.js');
+    const out = await exportSalesExcel(c, { from: req.query.from, to: req.query.to });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/purchases', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportPurchasesExcel } = await import('./reportExport.js');
+    const out = await exportPurchasesExcel(c, { from: req.query.from, to: req.query.to });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/daybook', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportDayBookExcel } = await import('./reportExport.js');
+    const out = await exportDayBookExcel(c, { from: req.query.from, to: req.query.to });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/stock-summary', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportStockExcel } = await import('./reportExport.js');
+    const out = await exportStockExcel(c, { from: req.query.from, to: req.query.to });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/ledger', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportLedgerExcel } = await import('./reportExport.js');
+    const out = await exportLedgerExcel(c, { accountId: req.query.account_id, from: req.query.from, to: req.query.to });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/trial-balance', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportTrialBalanceExcel } = await import('./reportExport.js');
+    const out = await exportTrialBalanceExcel(c, { asOn: req.query.as_on });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/balance-sheet', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportBalanceSheetExcel } = await import('./reportExport.js');
+    const out = await exportBalanceSheetExcel(c, { asOn: req.query.as_on });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/profit-loss', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportProfitLossExcel } = await import('./reportExport.js');
+    const out = await exportProfitLossExcel(c, { from: req.query.from, to: req.query.to });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/gst-summary', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportGstExcel } = await import('./reportExport.js');
+    const out = await exportGstExcel(c, { from: req.query.from, to: req.query.to });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+api.get('/export/dashboard', async (req, res) => {
+  const c = companyOr(res); if (!c) return;
+  try {
+    const { exportDashboardExcel } = await import('./reportExport.js');
+    const out = await exportDashboardExcel(c);
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="${out.file}"`);
+    res.send(out.buf);
+  } catch (e) { fail(res, e); }
+});
+
 api.get('/export/:kind', async (req, res) => {
   const c = companyOr(res);
   if (!c) return;
@@ -796,6 +898,9 @@ api.get('/dashboard', (req, res) => {
   try { ok(res, dashboard(c)); }
   catch (e) { fail(res, e); }
 });
+
+// [export routes moved above generic export]
+
 
 // ---------------------------------------------------------------
 // In-app one-click updates. The app fetches the newest PC package

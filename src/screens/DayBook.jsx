@@ -24,9 +24,15 @@ export function DayBookScreen({ focusId }) {
     <div>
       <div className="pagetitle">
         <div><div className="crumb">Transactions · Day Book</div><h1>Day Book</h1></div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <a className="btn ghost sm" href={`/api/export/daybook?from=${from}&to=${to}`} download>⬇ Download Day Book (Excel)</a>
+          <a className="btn ghost sm" href={`/api/export/sales?from=${from}&to=${to}`} download>⬇ Sales (verify 927956)</a>
+          <a className="btn ghost sm" href={`/api/export/purchases?from=${from}&to=${to}`} download>⬇ Purchases</a>
+          <a className="btn ghost sm" href="/api/export/dashboard" download>⬇ Dashboard</a>
+        </div>
       </div>
       <div className="card">
-        <div className="frow" style={{ marginBottom: 10 }}>
+        <div className="frow" style={{ marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label className="f"><span>From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
           <label className="f"><span>To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
           <label className="f"><span>Voucher type</span>
@@ -35,8 +41,9 @@ export function DayBookScreen({ focusId }) {
               {Object.keys(CLASSES).map((k) => <option key={k} value={k}>{CLASSES[k].label}</option>)}
             </select>
           </label>
-          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2, gap: 6, flexWrap: 'wrap' }}>
             <button className="btn ghost" onClick={load}>Refresh</button>
+            <a className="btn ghost sm" href={`/api/export/daybook?from=${from}&to=${to}`} download>⬇ Download (Excel)</a>
           </div>
         </div>
         {rows !== null && rows.length === 0 && <div className="empty">No vouchers in this period.</div>}

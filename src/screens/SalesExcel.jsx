@@ -216,6 +216,8 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
         <button className={`btn ${mode === 'upload' ? '' : 'ghost'}`} onClick={() => setMode('upload')}>📂 Upload Excel (multi-sheet bills)</button>
         <a className="btn ghost" href="/api/export/invoice_excel_template">⬇ Sales Excel Template (multi-sheet)</a>
         <a className="btn ghost" href="/api/export/items?mode=template">⬇ Items Template</a>
+        <a className="btn" style={{ borderColor: 'var(--gold-hi)', background: 'linear-gradient(180deg, var(--gold-hi), var(--gold))', color: '#000', fontWeight: 800 }} href="/api/export/sales" download>⬇ Download All Sales (Excel) — verify 927956 incl GST</a>
+        <a className="btn ghost" href="/api/export/dashboard" download>⬇ Dashboard</a>
       </div>
 
       {mode === 'grid' && (

@@ -91,11 +91,22 @@ export function Gateway() {
       {company && (
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
           <div className="crumb">Dashboard · {company.name} · FY {company.financial_year_from.slice(0, 4)}–{Number(company.financial_year_from.slice(0, 4)) + 1}</div>
-          <button className="btn ghost sm" onClick={() => { loadDash(); loadFx(); }}>⟳ Refresh</button>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <a className="btn ghost sm" href="/api/export/dashboard" download>⬇ Download Dashboard (Excel)</a>
+            <a className="btn ghost sm" href="/api/export/sales" download>⬇ Sales</a>
+            <a className="btn ghost sm" href="/api/export/purchases" download>⬇ Purchases</a>
+            <a className="btn ghost sm" href="/api/export/stock-summary" download>⬇ Stock</a>
+            <a className="btn ghost sm" href="/api/export/daybook" download>⬇ Day Book</a>
+            <a className="btn ghost sm" href="/api/export/gst-summary" download>⬇ GST</a>
+            <button className="btn ghost sm" onClick={() => { loadDash(); loadFx(); }}>⟳ Refresh</button>
+          </div>
         </div>
       )}
 
-      {/* ---------- TOP KPI ROW — v1.11.42 FIX: ONLY TAX INVOICE AFFECTS STOCK, PI/PROFORMA/QUOTATION/ESTIMATE NO STOCK ---------- */}
+      {/* ---------- TOP KPI ROW — v1.11.45 FIX: Download buttons everywhere + 927956 mismatch explained via Excel ---------- */}
+      <div style={{ border: '1px solid var(--gold-line)', borderRadius: 6, padding: '8px 10px', marginBottom: 10, background: 'rgba(212,175,55,0.08)', fontSize: 12, color: 'var(--ink-dim)' }}>
+        <b style={{ color: 'var(--gold-hi)' }}>v1.11.45 — Sales 927956 after GST mismatch? Download to verify:</b> Taxable Sales = Sales ledger only (excl GST). Invoice Value incl GST = Party Dr (incl GST, excl stock valuation). If you see 927956, download <a href="/api/export/sales" style={{ color: 'var(--gold-hi)', textDecoration: 'underline' }}>Sales Excel</a> — check Invoice_Total_Incl_GST total — that should be 927956. Taxable + GST = Invoice Total. Only Tax Invoice affects stock, PI/Proforma does NOT. Stock import never in sales. <b style={{ color: 'var(--gold)' }}>⬇ Download buttons added to ALL tabs wherever applicable.</b>
+      </div>
       <div className="kpis" style={{ marginBottom: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
         <div className="kpi" style={{ borderColor: 'var(--gold-line)', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }} onClick={() => setView({ name: 'reports', which: 'ledger' })} title="Click to drill down — Bank ledger & accounts"><div className="k">Bank balance</div><div className="v" style={{ color: 'var(--gold-hi)' }}>{fmt(bankTotal)}</div><div className="s">{d?.bank?.accounts?.length || 0} accounts · Click to drill ↓</div></div>
         <div className="kpi" style={{ cursor: 'pointer' }} onClick={() => setView({ name: 'reports', which: 'ledger' })} title="Click to drill down — Cash ledger"><div className="k">Cash in hand</div><div className="v">{fmt(cashTotal)}</div><div className="s">{d?.cash?.accounts?.map(a => a.name).join(', ') || '—'} · Click ↓</div></div>
