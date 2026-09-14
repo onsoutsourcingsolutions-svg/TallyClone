@@ -116,7 +116,7 @@ function Shell() {
     setMenuOpen(false);
     notify('Checking for a newer build…');
     let j = null;
-    try { j = await checkUpdate(); } catch (_) { j = null; }
+    try { j = await checkUpdate(true); } catch (_) { j = null; }
     if (!j) { notify('No internet — could not check. Reloading the page…'); window.location.reload(); return; }
     if (j.update && j.latest) {
       notify('New build ' + String(j.latest).replace(/ ·.*/, '') + ' found — installing now…');

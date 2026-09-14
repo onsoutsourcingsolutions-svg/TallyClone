@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, useApp } from '../state.jsx';
 import { BUILD_TAG } from '../../version.js';
-import { checkUpdate, applyUpdate } from '../upd.js';
+import { checkUpdate, applyUpdate, forceUpdate } from '../upd.js';
 import { STATE_CODES } from '../fmt.js';
 import { initialsOf } from '../brand.jsx';
 
@@ -19,7 +19,7 @@ export function SettingsScreen() {
       if (j && j.ok) setPhoneUrls((j.urls || []).filter((u) => !/localhost|127\./.test(u)));
     }).catch(() => {});
   }, []);
-  useEffect(() => { checkUpdate().then((j) => setUpd(j)); }, []);
+  useEffect(() => { checkUpdate(true).then((j) => setUpd(j)); }, []);
   const thisUrl = typeof location !== 'undefined' ? location.origin : '';
   useEffect(() => {
     if (company) setF({
@@ -278,14 +278,20 @@ export function SettingsScreen() {
           </p>
         )}
         {updMsg && <p className="faint" style={{ margin: '4px 0 6px', fontSize: 12.5 }}>{updMsg}</p>}
-        <p style={{ margin: '2px 0 0' }}>
+        <p style={{ margin: '2px 0 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn ghost" style={{ padding: '5px 12px', fontSize: 12.5 }} disabled={updBusy} onClick={async () => {
             setUpdMsg(''); setUpd(null);
-            const j = await checkUpdate();
+            const j = await checkUpdate(true);
             setUpd(j);
-            if (!j) setUpdMsg('Could not check for updates right now. Is this PC online?');
-          }}>↻ Check again</button>
+            if (!j) setUpdMsg('Could not check for updates right now. Is this PC online? Try Force Update.');
+          }}>↻ Check again (force, bypass cache, jsDelivr CDN)</button>
+          <button className="btn ghost" style={{ padding: '5px 12px', fontSize: 12.5, borderColor: '#e67e22' }} disabled={updBusy} onClick={async () => {
+            if (!window.confirm('Force update will download latest FULL build (30MB) directly from GitHub/jsDelivr and install, even if version check says you are latest. Continue?')) return;
+            setUpdBusy(true); setUpdMsg('Force downloading FULL build from GitHub/jsDelivr CDN (30MB) — server will auto-restart in 5 sec, NO manual close, NO zip download needed. Please wait...');
+            try { await forceUpdate(); } catch (e) { setUpdMsg(e.message); setUpdBusy(false); }
+          }}>⚡ Force Update from GitHub (30MB FULL, no zip, fixes STILL NOT UPDATE)</button>
         </p>
+        <p className="faint" style={{ fontSize: 11, marginTop: 8 }}>v1.11.31: Update uses jsDelivr CDN (fast in India) + GitHub raw fallback. If stuck on v1.11.27 STILL NOT UPDATE, use Force Update — downloads FULL package directly from GitHub, no manual zip.</p>
       </div>
       <div className="card">
         <h3>About this copy</h3>

@@ -45,7 +45,7 @@ export function Gateway() {
     } catch { setFx(null); setFxState('off'); }
   };
 
-  useEffect(() => { loadDash(); loadFx(true); checkUpdate().then(j => setUpd(j)); }, []);
+  useEffect(() => { loadDash(); loadFx(true); checkUpdate(true).then(j => setUpd(j)); }, []);
 
   const doUpdate = async () => {
     setUpdBusy(true);

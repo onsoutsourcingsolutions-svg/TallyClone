@@ -772,9 +772,22 @@ api.get('/dashboard', (req, res) => {
 // ---------------------------------------------------------------
 const APP_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // (the env overrides exist so the update flow can be tested against a local stand-in)
-// v1.11.28: HOST DIRECTLY VIA GITHUB — use FULL zip (30MB) includes node_modules, so NO manual download or npm install needed
-// User asked WHY DO I HAVE TO DOWNLOAD AGAIN — now auto-update downloads directly from GitHub raw, no manual steps
-const PKG_URL = process.env.ONS_UPDATE_ZIP_URL || 'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip';
+// v1.11.31: HOST DIRECTLY VIA GITHUB + jsDelivr CDN for reliability — user stuck on v1.11.27 STILL NOT UPDATE due to raw.githubusercontent.com cache/block
+// Use jsDelivr CDN (fast in India, not blocked) + raw fallback + GitHub API fallback
+const PKG_URLS = [
+  process.env.ONS_UPDATE_ZIP_URL,
+  'https://cdn.jsdelivr.net/gh/onsoutsourcingsolutions-svg/TallyClone@arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip',
+  'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip',
+  'https://raw.githubusercontent.com/onsoutsourcingsolutions-svg/TallyClone/arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip'
+].filter(Boolean);
+const PKG_URL = PKG_URLS[0];
+const TAG_URLS = [
+  process.env.ONS_UPDATE_VERSION_URL,
+  'https://cdn.jsdelivr.net/gh/onsoutsourcingsolutions-svg/TallyClone@arena/01a0827e-tallyclone/version.js',
+  'https://raw.githubusercontent.com/onsoutsourcingsolutions-svg/TallyClone/arena/01a0827e-tallyclone/version.js',
+  'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/version.js'
+].filter(Boolean);
+const TAG_URL = TAG_URLS[0];
 const TAG_URL = process.env.ONS_UPDATE_VERSION_URL || 'https://raw.githubusercontent.com/onsoutsourcingsolutions-svg/TallyClone/arena/01a0827e-tallyclone/version.js';
 
 // paths that are never replaced by an update — v1.11.28: NO LONGER SKIP node_modules when using FULL zip (hosted via GitHub, includes deps, so update is truly self-contained)
@@ -797,21 +810,33 @@ function newerThan(a, b) { // a > b ?
 }
 
 async function remoteBuildTag() {
-  const r = await fetch(TAG_URL + '?t=' + Date.now(), {
-    signal: AbortSignal.timeout(12000),
-    headers: { accept: 'text/plain', 'user-agent': 'ONS-Books-updater' },
-  });
-  if (!r.ok) throw new Error('update server answered HTTP ' + r.status);
-  const txt = await r.text();
-  const m = /BUILD_TAG\s*=\s*'([^']+)'/.exec(txt);
-  if (!m || !m[1]) throw new Error('update server sent an unreadable reply');
-  return m[1];
+  let lastErr = null;
+  for (const base of TAG_URLS) {
+    try {
+      const url = base + (base.includes('?') ? '&' : '?') + 't=' + Date.now();
+      const r = await fetch(url, {
+        signal: AbortSignal.timeout(12000),
+        headers: { accept: 'text/plain, */*', 'user-agent': 'ONS-Books-updater', 'cache-control': 'no-cache' },
+      });
+      if (!r.ok) { lastErr = new Error('update server ' + base + ' HTTP ' + r.status); continue; }
+      const txt = await r.text();
+      const m = /BUILD_TAG\s*=\s*'([^']+)'/.exec(txt);
+      if (!m || !m[1]) { lastErr = new Error('unreadable reply from ' + base); continue; }
+      console.log('[update] remote tag from', base, '->', m[1]);
+      return m[1];
+    } catch (e) {
+      lastErr = e;
+      console.warn('[update] failed to fetch tag from', base, e.message);
+    }
+  }
+  throw lastErr || new Error('all update servers failed');
 }
 
 let _updCheckCache = null; // { at, body }
 api.get('/update/check', async (req, res) => {
-  // v1.11.26: reduced cache to 10 sec for live updates — user complained 1.11.25 NOT PUSHED due to 60 sec cache
-  if (_updCheckCache && Date.now() - _updCheckCache.at < 10000) return ok(res, _updCheckCache.body);
+  const force = String(req.query.force||'') === '1' || String(req.query.t||'').includes('force');
+  // v1.11.31: reduced cache to 5 sec, force=1 bypasses cache — user STILL NOT UPDATE on v1.11.27 due to raw cache
+  if (!force && _updCheckCache && Date.now() - _updCheckCache.at < 5000) return ok(res, _updCheckCache.body);
   const cur = semverOf(BUILD_TAG);
   let body;
   try {
@@ -830,7 +855,90 @@ api.get('/update/check', async (req, res) => {
   ok(res, body);
 });
 
-api.get('/ping', (req, res) => ok(res, {}));
+api.get('/ping', (req, res) => ok(res, { build: BUILD_TAG, now: new Date().toISOString() }));
+
+// v1.11.31: force update without version check — for STILL NOT UPDATE case
+api.post('/update/force', async (req, res) => {
+  try {
+    _updCheckCache = null;
+    backupData('pre-force-update');
+    // download latest regardless of version
+    let buf = null;
+    let lastErr = null;
+    for (const pkgBase of PKG_URLS) {
+      try {
+        const r = await fetch(pkgBase + '?t=' + Date.now(), { signal: AbortSignal.timeout(120000), headers: { accept: 'application/zip', 'user-agent': 'ONS-Books-updater' } });
+        if (!r.ok) { lastErr = new Error('HTTP '+r.status+' from '+pkgBase); continue; }
+        const b = Buffer.from(await r.arrayBuffer());
+        if (b.length < 500 || b.readUInt32LE(0) !== 0x04034b50) { lastErr = new Error('Invalid zip '+pkgBase); continue; }
+        buf = b; break;
+      } catch (e) { lastErr = e; }
+    }
+    if (!buf) throw lastErr || new Error('Download failed');
+    const stage = path.join(APP_ROOT, '_update_stage');
+    fs.rmSync(stage, { recursive: true, force: true });
+    const files = extractZip(buf, stage, { skip: UPDATE_SKIP });
+    const have = new Set(files);
+    if (!have.has('server/index.js') && !have.has('dist/index.html')) {
+      fs.rmSync(stage, { recursive: true, force: true });
+      throw new Error('Package looks wrong');
+    }
+    for (const rel of files) {
+      try {
+        const dst = path.join(APP_ROOT, rel);
+        fs.mkdirSync(path.dirname(dst), { recursive: true });
+        fs.renameSync(path.join(stage, rel), dst);
+      } catch (_) {}
+    }
+    fs.rmSync(stage, { recursive: true, force: true });
+    for (const root of CODE_ROOTS) {
+      const dir = path.join(APP_ROOT, root);
+      if (!fs.existsSync(dir)) continue;
+      const walk = (d) => {
+        for (const n of fs.readdirSync(d)) {
+          const f = path.join(d, n);
+          if (fs.statSync(f).isDirectory()) { walk(f); continue; }
+          const rel = path.relative(APP_ROOT, f).split(path.sep).join('/');
+          if (!have.has(rel)) { try { fs.unlinkSync(f); } catch (_) {} }
+        }
+      };
+      walk(dir);
+    }
+    res.json({ ok: true, installed: 'forced', message: 'Forced update installed — server restarts in 4 sec, NO close needed. Press Ctrl+F5 after 5 sec.' });
+    setTimeout(() => {
+      try {
+        if (process.platform === 'win32') {
+          const bat = path.join(APP_ROOT, '_apply-restart.bat');
+          const batContent = [
+            '@echo off','setlocal',
+            'rem FORCED update restart v1.11.31',
+            'cd /d "%~dp0."',
+            'echo [%date% %time%] FORCED RESTART >> update-restart.log',
+            'timeout /t 4 /nobreak >nul',
+            'for /f "tokens=5" %%a in (\'netstat -aon ^| findstr :8080 ^| findstr LISTENING\') do taskkill /f /pid %%a >nul 2>nul',
+            'timeout /t 2 /nobreak >nul',
+            'if exist "node_modules\\express\\package.json" (',
+            '  start "" /b cmd /c "npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
+            ') else (',
+            '  start "" /b cmd /c "npm install --no-audit --no-fund --prefer-offline >> server.log 2>&1 & npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
+            ')',
+            'timeout /t 3 /nobreak >nul',
+            'del "%~f0" >nul 2>nul',
+            'endlocal','exit /b 0'
+          ].join('\r\n');
+          fs.writeFileSync(bat, batContent);
+          const p = spawn('cmd.exe', ['/c', 'start', '/b', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore', windowsHide: true });
+          p.unref();
+        } else {
+          const p = spawn('/bin/sh', ['-c', 'sleep 3; npm run build; exec node server/run.js'], { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
+          p.unref();
+        }
+      } catch (_) {}
+    }, 800);
+    setTimeout(() => { try { process.exit(0); } catch (_) {} }, 2500);
+  } catch (e) { fail(res, e); }
+});
+
 
 api.post('/update/apply', async (req, res) => {
   try {
@@ -846,16 +954,29 @@ api.post('/update/apply', async (req, res) => {
     if (!ls) return fail(res, new Error('Could not reach the update server. Check the internet and try again.'));
     if (!cur || !newerThan(ls, cur)) return fail(res, new Error('Already on the newest build (' + BUILD_TAG + ') - nothing to install.'));
 
-    // 2. download the package
-    const r = await fetch(PKG_URL + '?t=' + Date.now(), {
-      signal: AbortSignal.timeout(90000),
-      headers: { accept: 'application/zip', 'user-agent': 'ONS-Books-updater' },
-    });
-    if (!r.ok) throw new Error('Download failed (HTTP ' + r.status + '). Try again in a minute.');
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length < 500 || buf.readUInt32LE(0) !== 0x04034b50) {
-      throw new Error('Downloaded package is not a valid zip. Try again in a minute.');
+    // 2. download the package — v1.11.31 try multiple CDNs (jsDelivr + raw) for reliability
+    let buf = null;
+    let lastDlErr = null;
+    for (const pkgBase of PKG_URLS) {
+      try {
+        console.log('[update] trying download from', pkgBase);
+        const r = await fetch(pkgBase + '?t=' + Date.now(), {
+          signal: AbortSignal.timeout(120000),
+          headers: { accept: 'application/zip, */*', 'user-agent': 'ONS-Books-updater', 'cache-control': 'no-cache' },
+        });
+        if (!r.ok) { lastDlErr = new Error('Download failed from ' + pkgBase + ' HTTP ' + r.status); continue; }
+        const b = Buffer.from(await r.arrayBuffer());
+        if (b.length < 500 || b.readUInt32LE(0) !== 0x04034b50) { lastDlErr = new Error('Invalid zip from ' + pkgBase); continue; }
+        buf = b;
+        console.log('[update] downloaded', (b.length/1024/1024).toFixed(1), 'MB from', pkgBase);
+        break;
+      } catch (e) {
+        lastDlErr = e;
+        console.warn('[update] download failed from', pkgBase, e.message);
+      }
     }
+    if (!buf) throw lastDlErr || new Error('Download failed from all mirrors. Check internet and try again.');
+
 
     // 3. unpack into a staging folder, skipping anything protected
     const stage = path.join(APP_ROOT, '_update_stage');
