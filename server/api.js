@@ -676,6 +676,36 @@ api.post('/backups/restore/:name', (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// v1.11.34: Delete backup — user requested X option to delete backup in backup tab — BLACK GOLD
+api.delete('/backups/:name', (req, res) => {
+  try {
+    const name = path.basename(String(req.params.name || ''));
+    if (!name.startsWith('backup-') || !name.endsWith('.db')) throw new Error('Invalid backup name');
+    const fp = path.join(BACKUP_DIR, name);
+    if (!fs.existsSync(fp)) throw Object.assign(new Error('Backup not found'), { status: 404 });
+    fs.unlinkSync(fp);
+    console.log(`[backup] Deleted ${name}`);
+    ok(res, { deleted: name });
+  } catch (e) { fail(res, e); }
+});
+
+api.delete('/backups', (req, res) => {
+  try {
+    const keep = Math.max(0, Number(req.query.keep) || 0);
+    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('backup-') && f.endsWith('.db')).map(f => {
+      const fp = path.join(BACKUP_DIR, f);
+      const st = fs.statSync(fp);
+      return { name: f, mtime: st.mtimeMs };
+    }).sort((a,b) => b.mtime - a.mtime);
+    let deleted = [];
+    for (let i = keep; i < files.length; i++) {
+      try { fs.unlinkSync(path.join(BACKUP_DIR, files[i].name)); deleted.push(files[i].name); } catch (_) {}
+    }
+    ok(res, { deleted, kept: keep });
+  } catch (e) { fail(res, e); }
+});
+
+
 // edit log for the company (audit trail screen)
 api.get('/edit-log', (req, res) => {
   const c = companyOr(res);

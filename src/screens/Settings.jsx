@@ -412,32 +412,57 @@ function BackupPanel() {
     } catch (e) { notify(e.message); }
     setBusy(false);
   };
+  // v1.11.34: Delete backup — BLACK GOLD X button as requested
+  const delOne = async (name) => {
+    if (!window.confirm(`Delete backup "${name}"? This cannot be undone.`)) return;
+    setBusy(true);
+    try {
+      await api('/backups/' + encodeURIComponent(name), { method: 'DELETE' });
+      notify('Deleted ' + name + ' ✕');
+      load();
+    } catch (e) { notify(e.message); }
+    setBusy(false);
+  };
+  const delAll = async () => {
+    if (!backs || !backs.length) return;
+    if (!window.confirm(`Delete ALL ${backs.length} backups? This cannot be undone. Current data stays safe.`)) return;
+    if (!window.confirm(`Are you sure? Delete ALL ${backs.length} backups?`)) return;
+    setBusy(true);
+    try {
+      await api('/backups?keep=0', { method: 'DELETE' });
+      notify(`Deleted all ${backs.length} backups ✕`);
+      load();
+    } catch (e) { notify(e.message); }
+    setBusy(false);
+  };
   return (
     <div>
       <p className="muted" style={{ margin: '0 0 10px', fontSize: 13 }}>
         Every time you start the app or click <b>Update now</b>, your <code>data/tally.db</code> is auto-backed up to <code>data/backups/</code>.
         Keeps last 20 backups. If you ever lose data (like extracting zip over folder), restore from here. You can also ask me to give you a backup — I can guide to download from this list.
       </p>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="btn sm" onClick={create} disabled={busy}>{busy ? '...' : '+ Create backup now'}</button>
         <button className="btn ghost sm" onClick={load} disabled={busy}>↻ Refresh list</button>
-        <span className="faint" style={{ fontSize: 11 }}>Location on your PC: <code>C:\Users\ADITYA MISHRA\Desktop\TallyClone\data\backups\</code> (or your current path)</span>
+        <button className="btn ghost sm" style={{ borderColor: '#e74c3c', color: '#e74c3c' }} onClick={delAll} disabled={busy || !backs || !backs.length}>✕ Delete all backups</button>
+        <span className="faint" style={{ fontSize: 11 }}>Location: <code>data/backups/</code> — BLACK GOLD theme — X deletes</span>
       </div>
       {backs === null && <div className="empty">Loading backups…</div>}
       {backs && backs.length === 0 && <div className="empty">No backups yet — one will be created on next start / update. Create one manually above.</div>}
       {backs && backs.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table className="grid">
-            <thead><tr><th>Backup file</th><th>Created</th><th className="tright">Size</th><th></th></tr></thead>
+          <table className="grid" style={{ background: 'linear-gradient(180deg, #1a170b, #000000)', border: '1px solid var(--gold)' }}>
+            <thead><tr><th style={{ color: 'var(--gold)', background: '#000' }}>Backup file</th><th style={{ color: 'var(--gold)', background: '#000' }}>Created</th><th className="tright" style={{ color: 'var(--gold)', background: '#000' }}>Size</th><th style={{ color: 'var(--gold)', background: '#000' }}>Actions — BLACK GOLD</th></tr></thead>
             <tbody>
               {backs.map(b => (
-                <tr key={b.name}>
-                  <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{b.name}</td>
-                  <td className="muted" style={{ fontSize: 12 }}>{new Date(b.created).toLocaleString()}</td>
-                  <td className="tright num">{b.size_kb} KB</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="btn ghost sm" onClick={() => download(b.name)}>Download</button>{' '}
-                    <button className="btn danger sm" onClick={() => restore(b.name)}>Restore</button>
+                <tr key={b.name} style={{ background: 'rgba(212,175,55,0.03)' }}>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--ink)' }}>{b.name}</td>
+                  <td style={{ fontSize: 12, color: 'var(--ink-dim)' }}>{new Date(b.created).toLocaleString()}</td>
+                  <td className="tright num" style={{ color: 'var(--gold-hi)' }}>{b.size_kb} KB</td>
+                  <td style={{ whiteSpace: 'nowrap', display: 'flex', gap: 6 }}>
+                    <button className="btn ghost sm" style={{ background: 'transparent', color: 'var(--gold)', borderColor: 'var(--gold-line)' }} onClick={() => download(b.name)}>⬇ Download</button>
+                    <button className="btn ghost sm" style={{ background: 'transparent', color: 'var(--gold-hi)', borderColor: 'var(--gold)' }} onClick={() => restore(b.name)}>↺ Restore</button>
+                    <button className="btn ghost sm" title="Delete this backup — X" style={{ background: '#000', color: '#e74c3c', borderColor: '#e74c3c', fontWeight: 800 }} onClick={() => delOne(b.name)}>✕ Delete</button>
                   </td>
                 </tr>
               ))}
