@@ -332,26 +332,46 @@ export function invoiceHtml(doc) {
   q(T(222.4, 706.30, cfg.jurisdiction, { size: 9.6 }));
   q(T(232.2, 718.42, cfg.computerGenerated, { size: 9.6 }));
 
-  /* ---- grid rules ---- */
-  // upper grid (fixed)
+  /* ---- grid rules — v1.11.38 GRIDLINES AS PER BILL — user: BILL PRINT EXCELLENT BUT GRIDLINES NEEDED AS PER BILL ---- */
+  // Upper meta grid (fixed)
   q(H(68, 216, 393.5)); q(H(94.5, 216, 393.5));
   q(H(121.5, 13.5, 393.5)); q(H(148.5, 216, 393.5)); q(H(175, 216, 571));
   q(H(202, 13.5, 217)); q(H(281.5, 13.5, 571)); q(H(295, 13.5, 571));
-  // upper verticals (fixed)
-  q(V(217.5, 40, Y(G.vTableBot)));       // 40 -> 506.5 (+S)
+  // Upper verticals (fixed)
+  q(V(217.5, 40, Y(G.vTableBot)));
   q(V(301, 40, 174.5)); q(V(393.5, 40, 174.5));
-  // item-table verticals (bottom follows Total)
-  [33.5, 217.5, 301, 393.5, 447.5, 501].forEach((x) => {
-    if (x !== 217.5) q(V(x, 280.5, Y(G.vTableBot)));
+  // Item-table verticals (full height, bottom follows Total) — BLACK & BOLD GRIDLINES
+  [33.5, 217.5, 301, 393.5, 447.5, 501, 571].forEach((x) => {
+    if (x === 217.5) q(V(x, 40, Y(G.vTableBot)));
+    else q(V(x, 280.5, Y(G.vTableBot)));
   });
-  // lower zone verticals (mini table + bank divider)
-  q(V(301, Y(G.vResume), 694.5));        // resumes below the words row
-  [393.5, 447.5, 501].forEach((x) => q(V(x, Y(G.vMini[0]), Y(G.vMini[1]))));
-  // lower horizontals (follow the Total row)
+  // Item-table HORIZONTAL GRIDLINES — one per item row + header + total (as per bill)
+  // Header already has 281.5 and 295, now add lines for each item row for clear grid
+  for (let i = 1; i <= R; i++) {
+    const y = G.item0 + i * ROW - 2; // bottom of each item row
+    if (y < yTaxable - 1) q(H(y, 13.5, 571));
+  }
+  // Also add line at bottom of last item before taxable (if items < 4, ensure gap has line)
+  if (R < 4) {
+    // Fill remaining empty rows with light gridlines up to taxable
+    for (let i = R; i < 4; i++) {
+      const y = G.item0 + i * ROW - 2;
+      if (y < yTaxable - 1) q(H(y, 13.5, 571));
+    }
+  }
+  // Taxable / tax / RO / Total horizontals (follow Total row)
+  q(H(yTaxable - 1, 13.5, 571));
   q(H(Y(G.hTotal), 13.5, 571)); q(H(Y(G.hAfterTotal), 13.5, 571));
   q(H(Y(G.hMiniHdr), 13.5, 571)); q(H(Y(G.hMiniVal), 13.5, 571));
   q(H(Y(G.hMiniBot), 300, 571));
   q(H(Y(G.hCaption), 13.5, 571));
+  // Lower zone verticals (mini table + bank divider) + full outer frame verticals
+  q(V(13.5, 40, 694.5)); q(V(571, 40, 694.5)); // outer left/right full height for grid
+  q(V(301, Y(G.vResume), 694.5));
+  [393.5, 447.5, 501].forEach((x) => q(V(x, Y(G.vMini[0]), Y(G.vMini[1]))));
+  // Extra: vertical line at 217.5 already, ensure 33.5 full for No. column
+  q(V(33.5, 40, Y(G.vTableBot)));
+  
 
   q('</div>');
   return out.join('\n');
