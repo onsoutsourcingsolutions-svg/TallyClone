@@ -234,7 +234,7 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
 
       {mode === 'upload' && (
         <>
-          <div style={{ border: '1px dashed var(--gold)', borderRadius: 8, padding: 12, background: 'rgba(212,175,55,0.06)', marginBottom: 10 }}>
+          <div style={{ border: '1px dashed var(--gold)', borderRadius: 8, padding: 12, background: 'linear-gradient(180deg, rgba(212,175,55,0.12), rgba(0,0,0,0.8))', marginBottom: 10, color: 'var(--ink)' }}>
             <h4 style={{ margin: '0 0 6px', fontSize: 13 }}>📂 NEW v1.11.24 — Multi-sheet Excel bills (same as Invoice Excel → Print tab)</h4>
             <p className="muted" style={{ fontSize: 12, margin: 0 }}>
               <b>Single Excel file, each sheet = one bill</b> (Sheet1=Bill 001, Sheet2=Bill 002, ...). Upload once → all sheets auto-detected, parsed (formatted PI-200 or tabular), sorted chrono DD/MM/YYYY, stock matched dynamically, Sales vouchers auto-created with CGST/SGST or IGST.
@@ -255,21 +255,21 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
           </div>
 
           {preview && preview.bulk && (
-            <div style={{ border: '1px solid var(--gold)', borderRadius: 6, padding: 10, marginTop: 8, background: '#fffbe6' }}>
-              <b style={{ fontSize: 13 }}>Preview — {preview.count} invoices found across all sheets (multi-sheet DD/MM/YYYY chrono)</b>
-              <div style={{ maxHeight: 260, overflowY: 'auto', marginTop: 6 }}>
-                <table className="grid" style={{ fontSize: 11.5 }}><thead><tr><th>Sheet → Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Buyer</th><th>GSTIN</th><th>Items</th><th>Regime</th></tr></thead>
-                  <tbody>{preview.bulk.map((p, i) => <tr key={i}><td>{p._sheet ? `${p._sheet} → ${p.invoice_no}` : p.invoice_no}</td><td>{ddMMyyyy(p.date)}</td><td>{p.buyer.name}</td><td>{p.buyer.gstin || '—'}</td><td>{p.items.length}</td><td>{p.regime}</td></tr>)}</tbody></table>
+            <div style={{ border: '1px solid var(--gold)', borderRadius: 8, padding: 14, marginTop: 10, background: 'linear-gradient(180deg, #1a170b, #000000)', boxShadow: '0 0 20px rgba(212,175,55,0.15)' }}>
+              <b style={{ fontSize: 13, color: 'var(--gold-hi)', letterSpacing: 0.5 }}>Preview — {preview.count} invoices found across all sheets (multi-sheet DD/MM/YYYY chrono)</b>
+              <div style={{ maxHeight: 320, overflowY: 'auto', marginTop: 8, border: '1px solid var(--gold-line-soft)', borderRadius: 6 }}>
+                <table className="grid" style={{ fontSize: 12, color: 'var(--ink)' }}><thead><tr><th style={{ color: 'var(--gold)', background: '#000' }}>Sheet → Invoice No</th><th style={{ color: 'var(--gold)', background: '#000' }}>Date (DD/MM/YYYY)</th><th style={{ color: 'var(--gold)', background: '#000' }}>Buyer</th><th style={{ color: 'var(--gold)', background: '#000' }}>GSTIN</th><th style={{ color: 'var(--gold)', background: '#000' }}>Items</th><th style={{ color: 'var(--gold)', background: '#000' }}>Regime</th></tr></thead>
+                  <tbody>{preview.bulk.map((p, i) => <tr key={i} style={{ background: i%2===0 ? 'rgba(212,175,55,0.04)' : 'transparent' }}><td style={{ color: 'var(--ink)' }}>{p._sheet ? `${p._sheet} → ${p.invoice_no}` : p.invoice_no}</td><td style={{ color: 'var(--ink-dim)' }}>{ddMMyyyy(p.date)}</td><td style={{ color: 'var(--gold-hi)' }}>{p.buyer.name}</td><td style={{ color: 'var(--ink-dim)' }}>{p.buyer.gstin || '—'}</td><td style={{ color: 'var(--ink)' }}>{p.items.length}</td><td style={{ color: 'var(--gold)' }}>{p.regime}</td></tr>)}</tbody></table>
               </div>
-              <div className="faint" style={{ fontSize: 11, marginTop: 6 }}>Detected {preview.count} bills across sheets — sorted chrono DD/MM/YYYY. Stock will be matched dynamically on booking.</div>
-              <div style={{ marginTop: 10 }}>
-                <button className="btn" disabled={busy || !file} onClick={() => doUpload(file, false)}>{busy ? 'Booking…' : `✔ Book all ${preview.count} invoices now (stock live)`}</button>
+              <div style={{ fontSize: 11, marginTop: 8, color: 'var(--ink-dim)' }}>Detected {preview.count} bills across sheets — sorted chrono DD/MM/YYYY. Stock will be matched dynamically on booking.</div>
+              <div style={{ marginTop: 12 }}>
+                <button className="btn" style={{ background: 'linear-gradient(180deg, var(--gold-hi), var(--gold))', color: '#000', fontWeight: 800, border: '1px solid var(--gold-hi)', boxShadow: '0 0 12px rgba(212,175,55,0.4)' }} disabled={busy || !file} onClick={() => doUpload(file, false)}>{busy ? 'Booking…' : `✔ Book all ${preview.count} invoices now (stock live)`}</button>
               </div>
             </div>
           )}
 
           {preview && preview.parsed && (
-            <div style={{ border: '1px solid var(--gold-line-soft)', borderRadius: 6, padding: 10, marginTop: 8 }}>
+            <div style={{ border: '1px solid var(--gold)', borderRadius: 8, padding: 14, marginTop: 10, background: 'linear-gradient(180deg, #1a170b, #000000)', color: 'var(--ink)' }}>
               <b style={{ fontSize: 13 }}>Preview — {preview.parsed._source === 'tabular' ? 'Tabular sheet' : 'Formatted PI-200 sheet'} · {preview.parsed.items.length} item(s)</b>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 12.5, marginTop: 6 }}>
                 <div>
@@ -292,7 +292,7 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
           )}
 
           {result && result.voucher && (
-            <div style={{ border: '1px solid var(--gold)', borderRadius: 6, padding: 10, marginTop: 8 }}>
+            <div style={{ border: '1px solid var(--gold)', borderRadius: 8, padding: 14, marginTop: 10, background: 'linear-gradient(180deg, #1a170b, #000000)', color: 'var(--ink)' }}>
               <b>✅ Booked from Excel — {result.voucher.number || '#' + result.voucher.voucher_no} · Date {ddMMyyyy(result.voucher.date)}</b>
               <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn" onClick={() => printVoucher(result.voucher.id)}>🖨 Print PI-200</button>
@@ -302,7 +302,7 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
           )}
 
           {result && result.vouchers && (
-            <div style={{ border: '1px solid var(--gold)', borderRadius: 6, padding: 10, marginTop: 8 }}>
+            <div style={{ border: '1px solid var(--gold)', borderRadius: 8, padding: 14, marginTop: 10, background: 'linear-gradient(180deg, #1a170b, #000000)', color: 'var(--ink)' }}>
               <b>✅ {result.count} invoices booked from Excel (multi-sheet DD/MM/YYYY chrono)</b>
               <div style={{ maxHeight: 220, overflowY: 'auto', marginTop: 6 }}>
                 <table className="grid" style={{ fontSize: 11.5 }}><thead><tr><th>Invoice No</th><th>Date</th><th>Voucher ID</th><th></th></tr></thead><tbody>{result.vouchers.map((v, i) => <tr key={i}><td>{v.number || '#' + v.voucher_no}</td><td>{ddMMyyyy(v.date)}</td><td>{v.id}</td><td><button className="btn ghost sm" onClick={() => printVoucher(v.id)}>🖨 Print</button> <button className="btn ghost sm" onClick={() => setViewVoucherId(v.id)}>View</button></td></tr>)}</tbody></table>

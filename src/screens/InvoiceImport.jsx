@@ -83,8 +83,8 @@ export function InvoiceImportScreen() {
         <div className="card">
           <h3>Preview — {preview.count} invoices found in Excel (tabular bulk)</h3>
           <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-            <table className="grid" style={{ fontSize: 12 }}>
-              <thead><tr><th>Sheet / Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Buyer</th><th>GSTIN</th><th>Items</th><th>Regime</th></tr></thead>
+            <table className="grid" style={{ fontSize: 12, color: 'var(--ink)' }}>
+              <thead><tr><th style={{ color: 'var(--gold)', background: '#000' }}>Sheet / Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Buyer</th><th>GSTIN</th><th>Items</th><th>Regime</th></tr></thead>
               <tbody>{preview.bulk.map((p, i) => (
                 <tr key={i}><td>{p._sheet ? `${p._sheet} → ${p.invoice_no}` : p.invoice_no}</td><td>{ddMMyyyy(p.date)}</td><td>{p.buyer.name}</td><td>{p.buyer.gstin || '—'}</td><td>{p.items.length}</td><td>{p.regime}</td></tr>
               ))}</tbody>
@@ -150,7 +150,7 @@ export function InvoiceImportScreen() {
         <div className="card" style={{ borderColor: 'var(--gold)' }}>
           <h3>✅ {result.count} invoices booked from Excel (multi-sheet)</h3>
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
-            <table className="grid" style={{ fontSize: 12 }}>
+            <table className="grid" style={{ fontSize: 12, color: 'var(--ink)' }}>
               <thead><tr><th>Invoice No</th><th>Date (DD/MM/YYYY)</th><th>Voucher ID</th><th></th></tr></thead>
               <tbody>{result.vouchers.map((v, i) => (
                 <tr key={i}><td>{v.number || '#' + v.voucher_no}</td><td>{ddMMyyyy(v.date)}</td><td>{v.id}</td><td><button className="btn ghost sm" onClick={() => printVoucher(v.id)}>🖨 Print</button></td></tr>
