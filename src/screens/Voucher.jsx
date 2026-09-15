@@ -379,19 +379,25 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
       </div>
       {detailItem && <StockDetailLazy itemId={detailItem.id} itemName={detailItem.name} onClose={() => setDetailItem(null)} onVoucher={(vid) => { setDetailItem(null); setViewVoucherId(vid); }} />}
       {viewVoucherId && <VoucherModalDirect voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />}
-      <div className="vfooter" style={{ flexWrap: 'wrap' }}>
+      <div className="vfooter" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <label className="f" style={{ minWidth: 200, margin: 0 }}><span>Narration</span><input value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
-        <span className="tot" style={{ minWidth: 320 }}>
-          <div className="lbl" style={{ fontSize: 11 }}>
-            Taxable {inr(sum.taxable)} · 
-            {regime==='intra' ? <>CGST {inr(sum.tax.CGST)} + SGST {inr(sum.tax.SGST)}</> : <>IGST {inr(sum.tax.IGST)}</>} = Tax {inr(sum.tax.CGST + sum.tax.SGST + sum.tax.IGST)}
+        <div style={{ minWidth: 380, border: '1px solid var(--gold-line-soft)', borderRadius: 6, padding: '6px 8px', background: 'rgba(212,175,55,0.06)' }}>
+          <div style={{ fontSize: 11, color: 'var(--ink-dim)' }}>
+            Taxable = Σ(qty×rate) = {sum.details?.map(d=>`${d.qty}×${d.rate}=${(d.taxable/100).toFixed(2)}`).join(' + ') || '0'} = <b style={{ color: 'var(--gold-hi)' }}>{inr(sum.taxable)}</b>
           </div>
-          <div className="amt okdiff">Total {inr(sum.total)}</div>
-          <div className="lbl" style={{ fontSize: 10, color: 'var(--ink-dim)' }}>
-            {sum.details?.slice(0,3).map((d,i)=><span key={i} style={{ marginRight: 8 }}>{d.qty}×{d.rate}={inr(d.taxable)} GST {d.gst}% → {regime==='intra' ? `CGST ${inr(d.cgst)} SGST ${inr(d.sgst)}` : `IGST ${inr(d.igst)}`} = {inr(d.total)}</span>)}
+          <div style={{ fontSize: 11, color: 'var(--ink-dim)', marginTop: 2 }}>
+            {regime==='intra' ? (
+              <>CGST = Tax/2, SGST = Tax/2 — Total Tax = Σ(taxable×GST%) = {sum.details?.map(d=>`${(d.taxable/100).toFixed(2)}×${d.gst}%= ${( (d.taxable*d.gst/100)/100).toFixed(2)}`).join(' + ')} = <b>{inr(sum.tax.CGST + sum.tax.SGST)}</b> → CGST <b style={{ color: '#8ec07c' }}>{inr(sum.tax.CGST)}</b> + SGST <b style={{ color: '#8ec07c' }}>{inr(sum.tax.SGST)}</b></>
+            ) : (
+              <>IGST = Σ(taxable×GST%) = {sum.details?.map(d=>`${(d.taxable/100).toFixed(2)}×${d.gst}%`).join(' + ')} = <b>{inr(sum.tax.IGST)}</b></>
+            )}
           </div>
-        </span>
-        <button className="btn" onClick={save}>{editing ? 'Update ' + label : 'Save ' + label}</button>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold-hi)', marginTop: 4 }}>Total = Taxable + Tax = {inr(sum.taxable)} + {inr(sum.tax.CGST + sum.tax.SGST + sum.tax.IGST)} = {inr(sum.total)}</div>
+          <div style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 4 }}>
+            v1.11.52 CALC: qty×rate exact (0.068×200000=13600) not rounded rate, GST% editable per row, CGST=SGST=Tax/2 half-even
+          </div>
+        </div>
+        <button className="btn" onClick={save} style={{ alignSelf: 'center' }}>{editing ? 'Update ' + label : 'Save ' + label}</button>
       </div>
       <p className="ledger-hint no-print">
         {label}: {hintBody(cls)} Stock and GST ledgers are posted automatically.
