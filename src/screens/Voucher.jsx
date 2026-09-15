@@ -229,7 +229,15 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
     const entry = (v.entries || []).find((e) => ['SundryDebtor', 'SundryCreditor'].includes(e.kind)) || (v.entries || [])[0];
     const hasIGST = (v.entries || []).some((e) => /IGST/.test(e.account_name || ''));
     const invTypeRaw = String(v.invoice_type || 'tax_invoice').toLowerCase();
-    const mapped = (v.items || []).map((it) => ({ name: it.item_name, qty: String(it.qty), rate: String(it.rate / 100) }));
+    const mapped = (v.items || []).map((it) => {
+      // v1.11.50 FIX: Rate display with 3-4 decimals — compute from amount/qty for accuracy (0.068*200000=13600, not 14000)
+      const qty = Number(it.qty) || 0;
+      const amt = Number(it.amount) || 0; // paise
+      const rateFromAmt = qty > 0 ? (amt / qty / 100) : (it.rate / 100);
+      // Keep up to 4 decimals, trim trailing zeros
+      const rateStr = Number.isFinite(rateFromAmt) ? String(Number(rateFromAmt.toFixed(4))) : String(it.rate / 100);
+      return { name: it.item_name, qty: String(it.qty), rate: rateStr };
+    });
     return {
       date: v.date, num: v.number, party: entry ? entry.account_name : '', narration: v.narration, ref: v.ref,
       regime: hasIGST ? 'inter' : 'intra',
@@ -261,7 +269,10 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
     const tax = { CGST: 0, SGST: 0, IGST: 0 };
     rows.forEach((r) => {
       const it = itemMap[r.name.trim().toLowerCase()];
-      const p = rs2p(r.rate) * Number(r.qty || 0);
+      // v1.11.50 FIX: Support rates with 3-4 decimals (e.g., 0.068) — amount = qty * rate rounded to paise, not rate rounded to paise * qty
+      const qty = Number(r.qty || 0);
+      const rate = Number(r.rate || 0);
+      const p = Math.round(qty * rate * 100); // paise, accurate for 0.068 * 200000 = 1360000 paise = 13600
       taxable += p;
       const g = it ? Number(it.gst_rate) : 0;
       if (g > 0 && p > 0) {
