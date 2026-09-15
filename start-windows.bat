@@ -111,45 +111,43 @@ if errorlevel 1 (
   )
 )
 
-rem --- 6. Start server, open browser once it really answers — v1.11.27 AUTO-RESTART NO MANUAL CLOSE ---
+rem --- 6. Start server, open browser once it really answers — v1.11.54 KEEP LIVE NO MANUAL OFF/ON ---
 :serverloop
 echo.
-echo  [step 3/3] Starting server... (auto-restart enabled — NO need to close manually on update)
+echo  [step 3/3] Starting server... (v1.11.54 KEEP LIVE — auto-restart, NO manual off/on needed)
+echo  Server will stay LIVE — site & app work without switching off/on
 echo.
+rem Kill any leftover node on 8080 before start (ensures clean start, no port busy)
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8080 ^| findstr LISTENING 2^>nul') do (
+  echo   Cleaning old process on :8080 PID %%a...
+  taskkill /f /pid %%a >nul 2>nul
+  timeout /t 1 /nobreak >nul
+)
 start "" /b node scripts\open-browser.js
 call npm start
 set EXITCODE=%errorlevel%
 echo.
 echo  Server stopped at %date% %time% with code %EXITCODE% >> server.log
-echo  Server stopped with code %EXITCODE% — checking if it was an auto-update restart...
+echo  Server stopped with code %EXITCODE% — v1.11.54 KEEP LIVE auto-restart...
 
-rem If update-restart.log exists and was updated in last 2 minutes, it was an update — auto-restart WITHOUT pause
+rem v1.11.54 FIX: Always auto-restart to keep server LIVE — no manual off/on needed
+rem If update-restart.log recent (<120 sec), it was an update — restart fast without pause
+set SHOULD_RESTART=1
 if exist "update-restart.log" (
   for /f "delims=" %%a in ('powershell -NoProfile -Command "(Get-Date) - (Get-Item 'update-restart.log').LastWriteTime | Select-Object -ExpandProperty TotalSeconds" 2^>nul') do set AGE=%%a
   if not defined AGE set AGE=9999
-  echo   update-restart.log age ~%AGE% sec
-  echo   If age ^< 120 sec, this was an auto-update — restarting automatically...
-  if not exist "_apply-restart.bat" (
-    echo   Detected auto-update restart — new server already running in background — restarting this window in 3 sec (NO manual close needed)...
-    timeout /t 3 /nobreak >nul
-    goto serverloop
-  )
   for /f "tokens=1 delims=." %%b in ("%AGE%") do set AGEINT=%%b
   if %AGEINT% LSS 120 (
-    echo   Recent update detected — auto-restarting...
-    timeout /t 3 /nobreak >nul
+    echo   Auto-update detected (age %AGEINT% sec) — restarting in 2 sec, NO manual close needed...
+    timeout /t 2 /nobreak >nul
     goto serverloop
   )
 )
 
-rem Normal stop (not update) — show message and pause
-echo.
-echo  The server stopped.
-echo  If you stopped it manually, you can close this window.
-echo  If it stopped due to an update, it should have auto-restarted above — if not, double-click START_ME.bat again.
-echo.
-pause
-exit /b %EXITCODE%
+rem Even if not update, keep alive — auto-restart in 3 sec unless user pressed Ctrl+C
+echo   Server stopped — auto-restarting in 3 sec to keep LIVE (press Ctrl+C twice to stop)...
+timeout /t 3 /nobreak >nul
+goto serverloop
 
 :nonode
 echo.

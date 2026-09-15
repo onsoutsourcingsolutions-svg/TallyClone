@@ -1084,9 +1084,9 @@ api.post('/update/force', async (req, res) => {
           const bat = path.join(APP_ROOT, '_apply-restart.bat');
           const batContent = [
             '@echo off','setlocal',
-            'rem FORCED update restart v1.11.49 FAST',
+            'rem FORCED update restart v1.11.54 KEEP LIVE — NO MANUAL OFF/ON
             'cd /d "%~dp0."',
-            'echo [%date% %time%] FORCED RESTART v1.11.49 FAST >> update-restart.log',
+            'echo [%date% %time%] FORCED RESTART v1.11.54 KEEP LIVE >> update-restart.log',
             'timeout /t 3 /nobreak >nul',
             'for /f "tokens=5" %%a in (\'netstat -aon ^| findstr :8080 ^| findstr LISTENING\') do taskkill /f /pid %%a >nul 2>nul',
             'timeout /t 1 /nobreak >nul',

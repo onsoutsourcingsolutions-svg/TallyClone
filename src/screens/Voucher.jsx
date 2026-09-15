@@ -595,8 +595,8 @@ export function VoucherScreen({ cls }) {
   };
   useEffect(() => { setViewId(null); setEditing(null); load(); }, [cls, company && company.id]);
   useEffect(() => {
-    // v1.11.49 auto-refresh list every 10 sec — data shows fast without manual refresh
-    const id = setInterval(() => { if (!editing) loadListOnly(); }, 10000);
+    // v1.11.49 auto-refresh list every 5 sec — data shows fast without manual refresh
+    const id = setInterval(() => { if (!editing) loadListOnly(); }, 5000);
     return () => clearInterval(id);
   }, [cls, since, editing]);
   const del = async (id) => {
