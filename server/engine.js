@@ -326,15 +326,16 @@ function buildInvoice(c, vid, payload) {
     if (!item) throw vErr(`Item #${it.item_id} not found.`);
     const qty = Number(it.qty);
     const rateNum = Number(it.rate);
-    // v1.11.50 FIX: Support 3-4 decimal rates (e.g., 0.068) — amount = qty*rate rounded to paise, not rate rounded to paise * qty
-    // Old: ratePaise = toPaise(rate) = Math.round(rate*100) -> 0.068*100=6.8->7 paise, amount=7*200000=14,000 (WRONG)
-    // New: amount = Math.round(qty*rate*100) -> 200000*0.068*100=1,360,000 paise = 13,600 (CORRECT)
+    // v1.11.51 FIX: CGST/SGST wrong + 0.068*200000 fix — support gst_rate override per row (5% OR item)
+    const gstOverride = it.gst_rate !== undefined && it.gst_rate !== '' && it.gst_rate !== null ? Number(it.gst_rate) : null;
+    const gstRate = gstOverride != null && Number.isFinite(gstOverride) ? gstOverride : Number(item.gst_rate || 0);
+    if (gstRate < 0 || gstRate > 100) throw vErr(`Item "${item.name}": GST% must be 0-100.`);
     if (!(qty > 0)) throw vErr(`Item "${item.name}": enter quantity.`);
     if (!(rateNum > 0)) throw vErr(`Item "${item.name}": enter rate.`);
     if (rateNum < 0) throw vErr(`Item "${item.name}": rate cannot be negative.`);
     const amount = Math.round(qty * rateNum * 100);
-    const ratePaise = toPaise(rateNum); // keep for backward compat display, but amount is accurate
-    resolved.push({ item, qty, ratePaise, amount, gst: Number(item.gst_rate || 0), rateNum });
+    const ratePaise = toPaise(rateNum);
+    resolved.push({ item, qty, ratePaise, amount, gst: gstRate, rateNum, gstOverride });
   }
   const baseTotal = resolved.reduce((s, x) => s + x.amount, 0);
 

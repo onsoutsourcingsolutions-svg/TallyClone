@@ -223,7 +223,7 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
         date: todayISO(), num: '', party: '', narration: '', ref: '',
         regime: (company.extras && company.extras.tax_regime_default) || 'intra',
         invoice_type: 'tax_invoice',
-        rows: [{ name: '', qty: '1', rate: '' }],
+        rows: [{ name: '', qty: '1', rate: '', gst: '' }],
       };
     }
     const entry = (v.entries || []).find((e) => ['SundryDebtor', 'SundryCreditor'].includes(e.kind)) || (v.entries || [])[0];
@@ -234,15 +234,14 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
       const qty = Number(it.qty) || 0;
       const amt = Number(it.amount) || 0; // paise
       const rateFromAmt = qty > 0 ? (amt / qty / 100) : (it.rate / 100);
-      // Keep up to 4 decimals, trim trailing zeros
       const rateStr = Number.isFinite(rateFromAmt) ? String(Number(rateFromAmt.toFixed(4))) : String(it.rate / 100);
-      return { name: it.item_name, qty: String(it.qty), rate: rateStr };
+      return { name: it.item_name, qty: String(it.qty), rate: rateStr, gst: it.item_gst_rate != null ? String(it.item_gst_rate) : '' };
     });
     return {
       date: v.date, num: v.number, party: entry ? entry.account_name : '', narration: v.narration, ref: v.ref,
       regime: hasIGST ? 'inter' : 'intra',
       invoice_type: invTypeRaw === 'proforma' || String(v.number||'').toUpperCase().startsWith('PI-') ? 'proforma' : 'tax_invoice',
-      rows: mapped.length ? mapped : [{ name: '', qty: '1', rate: '' }],
+      rows: mapped.length ? mapped : [{ name: '', qty: '1', rate: '', gst: '' }],
     };
   };
   const init = initFrom(editing);
@@ -267,24 +266,33 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
   const compute = () => {
     let taxable = 0;
     const tax = { CGST: 0, SGST: 0, IGST: 0 };
+    const details = []; // per row for CGST/SGST verification
     rows.forEach((r) => {
       const it = itemMap[r.name.trim().toLowerCase()];
-      // v1.11.50 FIX: Support rates with 3-4 decimals (e.g., 0.068) — amount = qty * rate rounded to paise, not rate rounded to paise * qty
+      // v1.11.51 FIX: CGST/SGST calculated wrong — support GST% override per row + accurate 0.068 calc
       const qty = Number(r.qty || 0);
       const rate = Number(r.rate || 0);
-      const p = Math.round(qty * rate * 100); // paise, accurate for 0.068 * 200000 = 1360000 paise = 13600
+      const p = Math.round(qty * rate * 100); // paise
       taxable += p;
-      const g = it ? Number(it.gst_rate) : 0;
+      // GST% can be overridden per row (e.g., 5% OR item), else from master
+      const g = r.gst !== '' && r.gst != null ? Number(r.gst) : (it ? Number(it.gst_rate) : 0);
       if (g > 0 && p > 0) {
         if (regime === 'intra') {
           const t = Math.round(p * g / 100);
           const a = halfEven(t / 2);
           tax.CGST += a; tax.SGST += t - a;
-        } else tax.IGST += Math.round(p * g / 100);
+          details.push({ qty, rate, gst: g, taxable: p, cgst: a, sgst: t-a, igst: 0, total: p+t });
+        } else {
+          const t = Math.round(p * g / 100);
+          tax.IGST += t;
+          details.push({ qty, rate, gst: g, taxable: p, cgst: 0, sgst: 0, igst: t, total: p+t });
+        }
+      } else if (p>0) {
+        details.push({ qty, rate, gst: g, taxable: p, cgst: 0, sgst: 0, igst: 0, total: p });
       }
     });
     const totalTax = tax.CGST + tax.SGST + tax.IGST;
-    return { taxable, tax, total: taxable + totalTax };
+    return { taxable, tax, total: taxable + totalTax, details };
   };
   const sum = compute();
 
@@ -300,7 +308,9 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
       if (!it) return setErr(`Line ${i + 1}: unknown item “${r.name}”. Pick from the list.`);
       if (!(Number(r.qty) > 0)) return setErr(`Line ${i + 1}: quantity must be positive.`);
       if (!(Number(r.rate) > 0)) return setErr(`Line ${i + 1}: enter rate.`);
-      items2.push({ item_id: it.id, qty: Number(r.qty), rate: Number(r.rate) });
+      const gstOverride = r.gst !== '' && r.gst != null ? Number(r.gst) : undefined;
+      if (gstOverride != null && (gstOverride < 0 || gstOverride > 100)) return setErr(`Line ${i + 1}: GST% must be 0-100.`);
+      items2.push({ item_id: it.id, qty: Number(r.qty), rate: Number(r.rate), gst_rate: gstOverride });
     }
     if (!items2.length) return setErr('Add at least one item line.');
     try {
@@ -344,32 +354,42 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
       <datalist id={listP}>{partyOpts.map((a) => <option key={a.id} value={a.name} />)}</datalist>
       <datalist id={listI}>{itemOpts.map((it) => <option key={it.id} value={it.name} />)}</datalist>
       <div className="lines">
-        <div className="lrow2" style={{ color: 'var(--ink-faint)', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', gridTemplateColumns: '2fr 80px 100px 80px 90px 40px' }}>
-          <div>Stock item * (hover/click 📜 for buy/sell vs party — live stock)</div><div className="tright">In Hand</div><div className="tright">Qty</div><div className="tright">Rate (₹)</div><div className="tright">History</div><div></div>
+        <div className="lrow2" style={{ color: 'var(--ink-faint)', fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', gridTemplateColumns: '2fr 60px 70px 80px 50px 80px 40px' }}>
+          <div>Stock item * (hover/click 📜 for buy/sell — live stock)</div><div className="tright">In Hand</div><div className="tright">Qty</div><div className="tright">Rate ₹</div><div className="tright">GST%</div><div className="tright">Amount</div><div></div>
         </div>
         {rows.map((r, i) => {
           const it = itemMap[r.name.trim().toLowerCase()];
           const low = it && it.stock_qty != null && Number(r.qty) > 0 && it.stock_qty + 1e-9 < Number(r.qty);
+          const qty = Number(r.qty||0);
+          const rate = Number(r.rate||0);
+          const amtPaise = Math.round(qty*rate*100);
           return (
-            <div className="lrow2" key={i} style={{ gridTemplateColumns: '2fr 80px 100px 80px 90px 40px', background: low ? 'rgba(224,160,107,0.12)' : 'transparent' }}>
+            <div className="lrow2" key={i} style={{ gridTemplateColumns: '2fr 60px 70px 80px 50px 80px 40px', background: low ? 'rgba(224,160,107,0.12)' : 'transparent' }}>
               <input list={listI} value={r.name} onChange={setRow(i, 'name')} placeholder="Item — click 📜 for history" title={it ? `In hand: ${it.stock_qty} ${it.unit} — click 📜 for full history` : ''} />
               <div className="tright num" style={{ fontSize: 11, color: it ? (it.stock_qty > 0 ? '#8ec07c' : '#e06b6b') : 'var(--ink-faint)', alignSelf: 'center' }}>{it ? `${it.stock_qty ?? 0} ${it.unit}` : '—'}</div>
               <input className="num" value={r.qty} onChange={setRow(i, 'qty')} inputMode="decimal" placeholder={it ? `max ${it.stock_qty}` : 'qty'} />
               <input className="num" value={r.rate} onChange={setRow(i, 'rate')} placeholder={it ? `${it.unit} · GST ${it.gst_rate ?? 0}%` : 'rate'} inputMode="decimal" />
-              <div style={{ alignSelf: 'center' }}>{it ? <button className="btn ghost sm" style={{ fontSize: 10, padding: '2px 6px', borderColor: 'var(--gold)' }} onClick={() => setDetailItem(it)} title="When bought, when sold, against what">📜</button> : ''}</div>
+              <input className="num" value={r.gst} onChange={setRow(i, 'gst')} placeholder={it ? String(it.gst_rate ?? 0) : '18'} inputMode="decimal" style={{ borderColor: r.gst!=='' ? 'var(--gold-hi)' : '' }} />
+              <div className="tright num" style={{ fontSize: 11, alignSelf: 'center' }}>{amtPaise ? inr(amtPaise) : ''}</div>
               <button className="minus" onClick={() => setRows(rows.filter((_, j) => j !== i))}>−</button>
             </div>
           );
         })}
-        <button className="btn ghost sm" onClick={() => setRows([...rows, { name: '', qty: '1', rate: '' }])}>+ Add item</button>
+        <button className="btn ghost sm" onClick={() => setRows([...rows, { name: '', qty: '1', rate: '', gst: '' }])}>+ Add item</button>
       </div>
       {detailItem && <StockDetailLazy itemId={detailItem.id} itemName={detailItem.name} onClose={() => setDetailItem(null)} onVoucher={(vid) => { setDetailItem(null); setViewVoucherId(vid); }} />}
       {viewVoucherId && <VoucherModalDirect voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />}
-      <div className="vfooter">
-        <label className="f" style={{ minWidth: 240, margin: 0 }}><span>Narration</span><input value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
-        <span className="tot">
-          <div className="lbl">Taxable {inr(sum.taxable)} · Tax {inr(sum.tax.CGST + sum.tax.SGST + sum.tax.IGST)}</div>
+      <div className="vfooter" style={{ flexWrap: 'wrap' }}>
+        <label className="f" style={{ minWidth: 200, margin: 0 }}><span>Narration</span><input value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
+        <span className="tot" style={{ minWidth: 320 }}>
+          <div className="lbl" style={{ fontSize: 11 }}>
+            Taxable {inr(sum.taxable)} · 
+            {regime==='intra' ? <>CGST {inr(sum.tax.CGST)} + SGST {inr(sum.tax.SGST)}</> : <>IGST {inr(sum.tax.IGST)}</>} = Tax {inr(sum.tax.CGST + sum.tax.SGST + sum.tax.IGST)}
+          </div>
           <div className="amt okdiff">Total {inr(sum.total)}</div>
+          <div className="lbl" style={{ fontSize: 10, color: 'var(--ink-dim)' }}>
+            {sum.details?.slice(0,3).map((d,i)=><span key={i} style={{ marginRight: 8 }}>{d.qty}×{d.rate}={inr(d.taxable)} GST {d.gst}% → {regime==='intra' ? `CGST ${inr(d.cgst)} SGST ${inr(d.sgst)}` : `IGST ${inr(d.igst)}`} = {inr(d.total)}</span>)}
+          </div>
         </span>
         <button className="btn" onClick={save}>{editing ? 'Update ' + label : 'Save ' + label}</button>
       </div>

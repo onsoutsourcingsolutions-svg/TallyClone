@@ -97,7 +97,8 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
         setErr(`Row ${i + 1}: insufficient stock for "${it.name}" — only ${qty(it.stock_qty)} ${it.unit} in hand. Add purchase/stock journal first or this will auto-create opening stock.`);
         // don't block, just warn — engine will auto stock-in if needed, but we warn
       }
-      items2.push({ item_id: it.id, qty: Number(r.qty), rate: Number(r.rate) });
+      const gstOv = r.gst !== '' && r.gst != null ? Number(r.gst) : undefined;
+      items2.push({ item_id: it.id, qty: Number(r.qty), rate: Number(r.rate), gst_rate: gstOv });
     }
     if (!items2.length) { setErr('Add at least one item row'); return; }
     setBusy(true);
