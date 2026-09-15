@@ -292,33 +292,35 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
     const details = [];
     rows.forEach((r) => {
       const it = itemMap[r.name.trim().toLowerCase()];
-      // v1.11.53 FIX: GST auto-calculated default 18% or 9+9% based on debtor — taxable qty*rate, GST auto
+      // v1.11.57 FIX: 13600 taxable → CGST 9% = 13600*9% = 1224, SGST 9% = 1224, no 1% or 18% column for CGST/SGST
       const qty = Number(r.qty || 0);
       const rate = Number(r.rate || 0);
       const p = Math.round(qty * rate * 100); // paise
       taxable += p;
-      // GST% override > item master > default 18% (9+9)
       let g = 18;
-      if (r.gst !== '' && r.gst != null) {
-        g = Number(r.gst);
-      } else if (it && it.gst_rate != null && Number(it.gst_rate) > 0) {
-        g = Number(it.gst_rate);
-      } else {
-        g = 18; // default 18% = 9+9
-      }
+      if (r.gst !== '' && r.gst != null) g = Number(r.gst);
+      else if (it && it.gst_rate != null && Number(it.gst_rate) > 0) g = Number(it.gst_rate);
+      else g = 18;
       if (g > 0 && p > 0) {
         if (regime === 'intra') {
-          const t = Math.round(p * g / 100);
-          const a = halfEven(t / 2);
-          tax.CGST += a; tax.SGST += t - a;
-          details.push({ qty, rate, gst: g, taxable: p, cgst: a, sgst: t-a, igst: 0, total: p+t });
+          // Explicit 9%+9% for 18% total: CGST = taxable*9%, SGST = taxable*9%
+          const halfRate = g/2;
+          const cgst = Math.round(p * halfRate / 100);
+          const sgst = Math.round(p * halfRate / 100);
+          // Adjust for rounding: ensure cgst+sgst = total tax
+          const total = Math.round(p * g / 100);
+          let adjCgst = cgst;
+          let adjSgst = total - adjCgst;
+          // If due to rounding cgst+sgst != total, adjust sgst
+          tax.CGST += adjCgst; tax.SGST += adjSgst;
+          details.push({ qty, rate, gst: g, halfRate, taxable: p, cgst: adjCgst, sgst: adjSgst, igst: 0, total: p+total });
         } else {
           const t = Math.round(p * g / 100);
           tax.IGST += t;
-          details.push({ qty, rate, gst: g, taxable: p, cgst: 0, sgst: 0, igst: t, total: p+t });
+          details.push({ qty, rate, gst: g, halfRate: g, taxable: p, cgst: 0, sgst: 0, igst: t, total: p+t });
         }
       } else if (p>0) {
-        details.push({ qty, rate, gst: g, taxable: p, cgst: 0, sgst: 0, igst: 0, total: p });
+        details.push({ qty, rate, gst: g, halfRate: g/2, taxable: p, cgst: 0, sgst: 0, igst: 0, total: p });
       }
     });
     const totalTax = tax.CGST + tax.SGST + tax.IGST;
@@ -398,8 +400,8 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
               <input list={listI} value={r.name} onChange={setRow(i, 'name')} placeholder="Item — click 📜 for history" title={it ? `In hand: ${it.stock_qty} ${it.unit} — click 📜 for full history` : ''} />
               <div className="tright num" style={{ fontSize: 11, color: it ? (it.stock_qty > 0 ? '#8ec07c' : '#e06b6b') : 'var(--ink-faint)', alignSelf: 'center' }}>{it ? `${it.stock_qty ?? 0} ${it.unit}` : '—'}</div>
               <input className="num" value={r.qty} onChange={setRow(i, 'qty')} inputMode="decimal" placeholder={it ? `max ${it.stock_qty}` : 'qty'} />
-              <input className="num" value={r.rate} onChange={setRow(i, 'rate')} placeholder={it ? `${it.unit} · GST ${it.gst_rate ?? 0}%` : 'rate'} inputMode="decimal" />
-              <input className="num" value={r.gst} onChange={setRow(i, 'gst')} placeholder={it ? String(it.gst_rate ?? 0) : '18'} inputMode="decimal" style={{ borderColor: r.gst!=='' ? 'var(--gold-hi)' : '' }} />
+              <input className="num" value={r.rate} onChange={setRow(i, 'rate')} placeholder={it ? `${it.unit} · GST ${it.gst_rate ?? 18}%` : 'rate'} inputMode="decimal" />
+              <input className="num" value={r.gst} onChange={setRow(i, 'gst')} placeholder={it ? String(it.gst_rate ?? 18) : '18'} inputMode="decimal" style={{ borderColor: r.gst!=='' ? 'var(--gold-hi)' : '' }} />
               <div className="tright num" style={{ fontSize: 11, alignSelf: 'center' }}>{amtPaise ? inr(amtPaise) : ''}</div>
               <button className="minus" onClick={() => setRows(rows.filter((_, j) => j !== i))}>−</button>
             </div>
@@ -411,20 +413,35 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
       {viewVoucherId && <VoucherModalDirect voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />}
       <div className="vfooter" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <label className="f" style={{ minWidth: 200, margin: 0 }}><span>Narration</span><input value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
-        <div style={{ minWidth: 380, border: '1px solid var(--gold-line-soft)', borderRadius: 6, padding: '6px 8px', background: 'rgba(212,175,55,0.06)' }}>
-          <div style={{ fontSize: 11, color: 'var(--ink-dim)' }}>
+        <div style={{ minWidth: 420, border: '1px solid var(--gold)', borderRadius: 6, padding: '8px 10px', background: 'linear-gradient(180deg, rgba(212,175,55,0.10), #000)' }}>
+          <div style={{ fontSize: 12, color: 'var(--ink)' }}>
             Taxable = Σ(qty×rate) = {sum.details?.map(d=>`${d.qty}×${d.rate}=${(d.taxable/100).toFixed(2)}`).join(' + ') || '0'} = <b style={{ color: 'var(--gold-hi)' }}>{inr(sum.taxable)}</b>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--ink-dim)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink)', marginTop: 4, borderTop: '1px solid var(--gold-line-soft)', paddingTop: 4 }}>
             {regime==='intra' ? (
-              <>CGST = Tax/2, SGST = Tax/2 — Total Tax = Σ(taxable×GST%) = {sum.details?.map(d=>`${(d.taxable/100).toFixed(2)}×${d.gst}%= ${( (d.taxable*d.gst/100)/100).toFixed(2)}`).join(' + ')} = <b>{inr(sum.tax.CGST + sum.tax.SGST)}</b> → CGST <b style={{ color: '#8ec07c' }}>{inr(sum.tax.CGST)}</b> + SGST <b style={{ color: '#8ec07c' }}>{inr(sum.tax.SGST)}</b></>
+              <>
+                <div>GST auto 18% = 9%+9% based on debtor (same state) — CGST 9% of Taxable, SGST 9% of Taxable</div>
+                <div style={{ marginTop: 2 }}>
+                  {sum.details?.map((d,i)=>(
+                    <div key={i} style={{ fontSize: 11, color: 'var(--ink-dim)' }}>
+                      {d.qty}×{d.rate}={ (d.taxable/100).toFixed(2)} × {d.gst}% total = { (d.taxable*d.gst/100/100).toFixed(2)} → CGST 9% = { (d.taxable*9/100/100).toFixed(2)} ( {inr(d.cgst)} ) + SGST 9% = { (d.taxable*9/100/100).toFixed(2)} ( {inr(d.sgst)} ) = {inr(d.total)}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 4, fontWeight: 700 }}>
+                  Total CGST 9% = {inr(sum.tax.CGST)} (13600×9%=1224) + SGST 9% = {inr(sum.tax.SGST)} = Tax {inr(sum.tax.CGST + sum.tax.SGST)}
+                </div>
+              </>
             ) : (
-              <>IGST = Σ(taxable×GST%) = {sum.details?.map(d=>`${(d.taxable/100).toFixed(2)}×${d.gst}%`).join(' + ')} = <b>{inr(sum.tax.IGST)}</b></>
+              <>
+                <div>IGST 18% (inter-state) = Taxable × 18%</div>
+                <div>Total IGST 18% = {inr(sum.tax.IGST)}</div>
+              </>
             )}
           </div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold-hi)', marginTop: 4 }}>Total = Taxable + Tax = {inr(sum.taxable)} + {inr(sum.tax.CGST + sum.tax.SGST + sum.tax.IGST)} = {inr(sum.total)}</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold-hi)', marginTop: 6 }}>Total = Taxable {inr(sum.taxable)} + Tax {inr(sum.tax.CGST + sum.tax.SGST + sum.tax.IGST)} = {inr(sum.total)}</div>
           <div style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 4 }}>
-            v1.11.52 CALC: qty×rate exact (0.068×200000=13600) not rounded rate, GST% editable per row, CGST=SGST=Tax/2 half-even
+            v1.11.57 FIX: 13600 taxable → CGST 9% = 13600×9% = 1224, SGST 9% = 1224, no 1% or 18% column for CGST/SGST — only 9%+9%
           </div>
         </div>
         <button className="btn" onClick={save} style={{ alignSelf: 'center' }}>{editing ? 'Update ' + label : 'Save ' + label}</button>

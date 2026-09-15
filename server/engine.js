@@ -358,10 +358,16 @@ function buildInvoice(c, vid, payload) {
       const g = x.gst;
       if (!(g > 0)) continue;
       if (regime === 'intra') {
+        // v1.11.57 FIX: 13600 taxable → CGST 9% = 13600*9% = 1224, SGST 9% = 1224, no 1% or 18% column
+        const halfRate = g/2;
+        const cgst = Math.round((x.amount * halfRate) / 100);
+        const sgst = Math.round((x.amount * halfRate) / 100);
         const total = Math.round((x.amount * g) / 100);
-        const a = roundHalfEven(total / 2);
-        addBucket('CGST', g / 2, x.amount, a);
-        addBucket('SGST', g / 2, x.amount, total - a);
+        // Adjust to ensure cgst+sgst = total (handle rounding)
+        const adjCgst = cgst;
+        const adjSgst = total - adjCgst;
+        addBucket('CGST', halfRate, x.amount, adjCgst);
+        addBucket('SGST', halfRate, x.amount, adjSgst);
       } else {
         addBucket('IGST', g, x.amount, Math.round((x.amount * g) / 100));
       }
