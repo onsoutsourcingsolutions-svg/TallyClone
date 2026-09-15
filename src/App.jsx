@@ -134,6 +134,25 @@ function Shell() {
     return () => window.removeEventListener('keydown', onKey);
   }, [menuOpen, goBack]);
 
+  // v1.11.49 FIX: Global auto-reload when new build detected — no need to switch off/on server
+  useEffect(() => {
+    let currentBuild = null;
+    fetch('/api/ping').then(r=>r.json()).then(j=>{ currentBuild = j.build; }).catch(()=>{});
+    const id = setInterval(async () => {
+      try {
+        const r = await fetch('/api/ping?t='+Date.now(), { cache: 'no-store' });
+        const j = await r.json();
+        if (currentBuild && j.build && j.build !== currentBuild) {
+          console.log('[global auto-update] New build', currentBuild, '->', j.build, 'reloading');
+          try { if ('caches' in window) { const keys = await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); } } catch(_){}
+          window.location.reload();
+        }
+        if (!currentBuild && j.build) currentBuild = j.build;
+      } catch(_){}
+    }, 20000);
+    return () => clearInterval(id);
+  }, []);
+
   // Clicking the logo always lands you on the newest build — v1.11.36: AUTOMATICALLY CLEARS ALL CACHES so STILL NOT UPDATE never repeats
   // User: MAKE SURE THAT EVERYTIME I CLICK ON THE LOGO TO UPDATE THE PREVIOUS CACHE IS AUTOMATICALLY CLEARED
   const logoClick = async () => {

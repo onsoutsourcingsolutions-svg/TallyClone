@@ -31,10 +31,14 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
   const [salesDash, setSalesDash] = useState(null);
   const [salesList, setSalesList] = useState([]);
   useEffect(() => {
-    // Fetch dashboard for total sales done — dynamic
-    fetch('/api/dashboard').then(r=>r.json()).then(j=>{ if(j&&j.ok) setSalesDash(j); }).catch(()=>{});
-    // Fetch recent sales vouchers for drill-down
-    fetch('/api/vouchers?class=sales').then(r=>r.json()).then(j=>{ if(j&&j.ok) setSalesList(j.rows||[]); }).catch(()=>{});
+    // Fetch dashboard for total sales done — dynamic — v1.11.49 auto-refresh every 10 sec to reduce time for data to show
+    const loadSales = () => {
+      fetch('/api/dashboard').then(r=>r.json()).then(j=>{ if(j&&j.ok) setSalesDash(j); }).catch(()=>{});
+      fetch('/api/vouchers?class=sales').then(r=>r.json()).then(j=>{ if(j&&j.ok) setSalesList(j.rows||[]); }).catch(()=>{});
+    };
+    loadSales();
+    const id = setInterval(loadSales, 10000);
+    return () => clearInterval(id);
   }, []);
 
   // Grid state for manual Excel-like entry

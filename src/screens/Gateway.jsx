@@ -45,7 +45,31 @@ export function Gateway() {
     } catch { setFx(null); setFxState('off'); }
   };
 
-  useEffect(() => { loadDash(); loadFx(true); checkUpdate(true).then(j => setUpd(j)); }, []);
+  useEffect(() => { 
+    loadDash(); 
+    loadFx(true); 
+    checkUpdate(true).then(j => setUpd(j));
+    // v1.11.49 FIX: Auto-refresh dashboard every 10 sec to reduce time taken for data to show — no manual refresh needed
+    const dashInterval = setInterval(() => { loadDash(); }, 10000);
+    // v1.11.49 FIX: Auto-detect new build and auto-reload — no need to switch off/on server manually
+    let currentBuild = null;
+    fetch('/api/ping').then(r=>r.json()).then(j=>{ currentBuild = j.build; }).catch(()=>{});
+    const buildInterval = setInterval(async () => {
+      try {
+        const r = await fetch('/api/ping?t='+Date.now(), { cache: 'no-store' });
+        const j = await r.json();
+        if (currentBuild && j.build && j.build !== currentBuild) {
+          console.log('[auto-update] New build detected', currentBuild, '->', j.build, '— auto-reloading');
+          // Clear cache and reload
+          try { if ('caches' in window) { const keys = await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); } } catch(_){}
+          window.location.reload();
+        } else if (!currentBuild && j.build) {
+          currentBuild = j.build;
+        }
+      } catch(_){}
+    }, 15000);
+    return () => { clearInterval(dashInterval); clearInterval(buildInterval); };
+  }, []);
 
   const doUpdate = async () => {
     setUpdBusy(true);
@@ -103,9 +127,9 @@ export function Gateway() {
         </div>
       )}
 
-      {/* ---------- TOP KPI ROW — v1.11.48 FIX: Edit voucher + Sales edit + COGS excluded ---------- */}
+      {/* ---------- TOP KPI ROW — v1.11.49 FIX: FAST UPDATE + AUTO RELOAD + EDIT VOUCHER + SALES EDIT ---------- */}
       <div style={{ border: '1px solid var(--gold-line)', borderRadius: 6, padding: '10px 12px', marginBottom: 10, background: 'rgba(212,175,55,0.10)', fontSize: 12, color: 'var(--ink-dim)' }}>
-        <b style={{ color: 'var(--gold-hi)' }}>v1.11.48 — EDIT VOUCHER FIXED + SALES EDIT + COGS EXCLUDED ✓ — 73 inv 927956 verified — Amount = Invoice excl COGS:</b><br/>
+        <b style={{ color: 'var(--gold-hi)' }}>v1.11.49 — FAST UPDATE AUTO RELOAD + EDIT VOUCHER FIXED + SALES 927956 ✓ — 73 inv 927956 verified — Amount = Invoice excl COGS:</b><br/>
         Taxable Sales = Sales ledger only (excl GST). Invoice Value incl GST = Party Dr (incl GST, excl stock valuation). Your data: 20 invoices FY25-26 = 374616, 53 invoices FY26-27 = 553340, Grand = 927956. Download <a href="/api/export/sales" style={{ color: 'var(--gold-hi)', textDecoration: 'underline' }}>Live Sales Excel (from DB)</a> to verify Invoice_Total_Incl_GST total = 927956. If figures dont match, difference is PI/Proforma excluded from stock or stock_journal not in sales. <b style={{ color: 'var(--gold)' }}>⬇ Download buttons added to ALL tabs wherever applicable.</b> Also download <a href="/templates/sales-927956-verified.xlsx" style={{ color: 'var(--gold-hi)', textDecoration: 'underline' }}>Your 927956 Verified Excel</a> and <a href="/templates/sales-927956-import-template.xlsx" style={{ color: 'var(--gold-hi)', textDecoration: 'underline' }}>Import Template (rate=taxable, GST 18% → 927956)</a>
       </div>
       <div className="kpis" style={{ marginBottom: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>

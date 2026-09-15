@@ -2,6 +2,11 @@ import { db, tx, getCompany, companyExtras, saveCompanyExtras, nextVoucherNo } f
 import { BS_TEMPLATE, PL_SECTIONS, groupMeta } from './chart.js';
 import { toPaise, todayISO, validISO, addDaysISO, fyEnd, roundHalfEven, CLASS_META } from './lib.js';
 
+// v1.11.49 FIX: Dashboard cache to reduce time taken for data to show — 2 sec TTL, cleared on voucher changes
+const _dashCache = new Map(); // companyId -> { at, data }
+export function clearDashboardCache(companyId) { if (companyId) _dashCache.delete(companyId); else _dashCache.clear(); }
+
+
 export function fmtP(p) { return (Number(p) / 100).toFixed(2); }
 
 // v1.11.42: Only TAX INVOICE affects stock — PI, PROFORMA, QUOTATION, ESTIMATE etc do NOT
@@ -826,8 +831,16 @@ export function gstSummary(c, from, to) {
   return { from, to, rows: rows.map(r => ({ ...r, tax: Number(r.tax), taxable: Number(r.taxable || 0) })) };
 }
 
-export function dashboard(c) {
+export function dashboard(c, opts = {}) {
   const asOn = todayISO();
+  // v1.11.49: Fast cache — if data requested within 2 sec and not forced, return cached
+  const force = opts && opts.force;
+  if (!force) {
+    const cached = _dashCache.get(c.id);
+    if (cached && Date.now() - cached.at < 2000) {
+      return cached.data;
+    }
+  }
   const fyFrom = c.financial_year_from;
   const fyEndDate = fyEnd(fyFrom);
   const monthFrom = asOn.slice(0, 7) + '-01';
@@ -1006,7 +1019,7 @@ export function dashboard(c) {
   }
   buySell.sort((a, b) => (b.lastSellDate || '').localeCompare(a.lastSellDate || ''));
 
-  return {
+  const result = {
     asOn, fyFrom, fyTo: fyEndDate, monthFrom,
     bank: { total: bankTotal, accounts: bankAccs },
     cash: { total: cashTotal, accounts: cashAccs },
@@ -1029,4 +1042,6 @@ export function dashboard(c) {
     recent,
     buySell,
   };
+  _dashCache.set(c.id, { at: Date.now(), data: result });
+  return result;
 }

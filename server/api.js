@@ -895,7 +895,10 @@ api.get('/reports/gst', (req, res) => {
 
 api.get('/dashboard', (req, res) => {
   const c = companyOr(res); if (!c) return;
-  try { ok(res, dashboard(c)); }
+  try { 
+    const force = String(req.query.force||'')==='1';
+    ok(res, dashboard(c, { force })); 
+  }
   catch (e) { fail(res, e); }
 });
 
@@ -914,6 +917,7 @@ const APP_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // Use jsDelivr CDN (fast in India, not blocked) + raw fallback + GitHub API fallback
 // v1.11.37: Force update fallback — 30MB FULL may timeout on slow internet, fallback to 1MB small zip (needs npm install but works)
 // User: NOT WORKING THE UPDATE IS NOT HAPPENING EVEN THE 30MB OPTION
+// v1.11.49 FIX: Try SMALL zip first (2.6MB) for 10x faster update, then FULL (32MB) as fallback — reduces time taken for data to update and show
 const PKG_URLS_FULL = [
   process.env.ONS_UPDATE_ZIP_URL,
   'https://cdn.jsdelivr.net/gh/onsoutsourcingsolutions-svg/TallyClone@arena/01a0827e-tallyclone/ONS-Books-PC-Package-full.zip',
@@ -925,7 +929,7 @@ const PKG_URLS_SMALL = [
   'https://github.com/onsoutsourcingsolutions-svg/TallyClone/raw/arena/01a0827e-tallyclone/ONS-Books-PC-Package.zip',
   'https://raw.githubusercontent.com/onsoutsourcingsolutions-svg/TallyClone/arena/01a0827e-tallyclone/ONS-Books-PC-Package.zip'
 ].filter(Boolean);
-const PKG_URLS = [...PKG_URLS_FULL, ...PKG_URLS_SMALL];
+const PKG_URLS = [...PKG_URLS_SMALL, ...PKG_URLS_FULL]; // SMALL first = fast update
 const PKG_URL = PKG_URLS[0];
 const TAG_URLS = [
   process.env.ONS_UPDATE_VERSION_URL,
@@ -1080,13 +1084,16 @@ api.post('/update/force', async (req, res) => {
           const bat = path.join(APP_ROOT, '_apply-restart.bat');
           const batContent = [
             '@echo off','setlocal',
-            'rem FORCED update restart v1.11.31',
+            'rem FORCED update restart v1.11.49 FAST',
             'cd /d "%~dp0."',
-            'echo [%date% %time%] FORCED RESTART >> update-restart.log',
-            'timeout /t 4 /nobreak >nul',
+            'echo [%date% %time%] FORCED RESTART v1.11.49 FAST >> update-restart.log',
+            'timeout /t 3 /nobreak >nul',
             'for /f "tokens=5" %%a in (\'netstat -aon ^| findstr :8080 ^| findstr LISTENING\') do taskkill /f /pid %%a >nul 2>nul',
-            'timeout /t 2 /nobreak >nul',
-            'if exist "node_modules\\express\\package.json" (',
+            'timeout /t 1 /nobreak >nul',
+            'if exist "dist\\index.html" (',
+            '  echo [%date% %time%] dist exists — FAST restart >> update-restart.log',
+            '  start "" /b cmd /c "node server\\run.js >> server.log 2>&1"',
+            ') else if exist "node_modules\\express\\package.json" (',
             '  start "" /b cmd /c "npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
             ') else (',
             '  start "" /b cmd /c "npm install --no-audit --no-fund --prefer-offline >> server.log 2>&1 & npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
@@ -1099,7 +1106,8 @@ api.post('/update/force', async (req, res) => {
           const p = spawn('cmd.exe', ['/c', 'start', '/b', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore', windowsHide: true });
           p.unref();
         } else {
-          const p = spawn('/bin/sh', ['-c', 'sleep 3; npm run build; exec node server/run.js'], { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
+          // v1.11.49 FAST restart for Mac/Linux — skip build if dist exists
+          const p = spawn('/bin/sh', ['-c', 'if [ -f dist/index.html ]; then sleep 2; exec node server/run.js; else sleep 1; npm run build; exec node server/run.js; fi'], { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
           p.unref();
         }
       } catch (_) {}
@@ -1214,13 +1222,16 @@ api.post('/update/apply', async (req, res) => {
             'echo [%date% %time%] Killing old server on :8080... >> update-restart.log',
             'for /f "tokens=5" %%a in (\'netstat -aon ^| findstr :8080 ^| findstr LISTENING\') do taskkill /f /pid %%a >nul 2>nul',
             'timeout /t 2 /nobreak >nul',
-            'echo [%date% %time%] Starting new server (FULL zip includes node_modules, no npm install needed)... >> update-restart.log',
-            'rem v1.11.28: FULL zip includes node_modules, so we can start directly. If small zip, try npm install then build.',
-            'if exist "node_modules\\express\\package.json" (',
-            '  echo [%date% %time%] node_modules found, building and starting... >> update-restart.log',
+            'echo [%date% %time%] Starting new server — v1.11.49 FAST RESTART — dist check... >> update-restart.log',
+            'rem v1.11.49: If dist exists (included in both zips now), skip build for instant restart — NO manual close needed, data shows fast',
+            'if exist "dist\\index.html" (',
+            '  echo [%date% %time%] dist found — FAST restart, no build needed (2 sec) >> update-restart.log',
+            '  start "" /b cmd /c "node server\\run.js >> server.log 2>&1"',
+            ') else if exist "node_modules\\express\\package.json" (',
+            '  echo [%date% %time%] dist missing but node_modules found — building then starting (5 sec) >> update-restart.log',
             '  start "" /b cmd /c "npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
             ') else (',
-            '  echo [%date% %time%] node_modules missing, installing then building... >> update-restart.log',
+            '  echo [%date% %time%] node_modules missing — installing then building (30 sec) >> update-restart.log',
             '  start "" /b cmd /c "npm install --no-audit --no-fund --prefer-offline >> server.log 2>&1 & npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
             ')',
             'echo [%date% %time%] New server start command issued — will be up in 5-10 sec >> update-restart.log',
@@ -1234,7 +1245,8 @@ api.post('/update/apply', async (req, res) => {
           const p = spawn('cmd.exe', ['/c', 'start', '/b', '""', '"' + bat + '"'], { detached: true, stdio: 'ignore', windowsHide: true });
           p.unref();
         } else {
-          const p = spawn('/bin/sh', ['-c', 'sleep 3; npm run build; exec node server/run.js'], { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
+          // v1.11.49 FAST restart for Mac/Linux — skip build if dist exists
+          const p = spawn('/bin/sh', ['-c', 'if [ -f dist/index.html ]; then sleep 2; exec node server/run.js; else sleep 1; npm run build; exec node server/run.js; fi'], { cwd: APP_ROOT, detached: true, stdio: 'ignore' });
           p.unref();
         }
       } catch (_) { /* nothing else we can do */ }

@@ -521,7 +521,17 @@ export function VoucherScreen({ cls }) {
     api('/vouchers?class=' + cls + '&from=' + since + '&to=' + todayISO())
       .then((j) => { setList(j.rows); setEditing(null); }).catch((e) => notify(e.message));
   };
+  const loadListOnly = () => {
+    // v1.11.49 FAST refresh — only vouchers list, no editing reset, reduces time for data to show
+    api('/vouchers?class=' + cls + '&from=' + since + '&to=' + todayISO())
+      .then((j) => { setList(j.rows); }).catch(()=>{});
+  };
   useEffect(() => { setViewId(null); setEditing(null); load(); }, [cls, company && company.id]);
+  useEffect(() => {
+    // v1.11.49 auto-refresh list every 10 sec — data shows fast without manual refresh
+    const id = setInterval(() => { if (!editing) loadListOnly(); }, 10000);
+    return () => clearInterval(id);
+  }, [cls, since, editing]);
   const del = async (id) => {
     if (!window.confirm('Delete this voucher?')) return;
     try { await api('/vouchers/' + id, { method: 'DELETE' }); notify('Deleted'); load(); }
