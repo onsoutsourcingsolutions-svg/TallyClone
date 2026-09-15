@@ -1056,49 +1056,30 @@ api.post('/update/force', async (req, res) => {
       fs.rmSync(stage, { recursive: true, force: true });
       throw new Error('Package looks wrong');
     }
-    for (const rel of files) {
-      try {
-        const dst = path.join(APP_ROOT, rel);
-        fs.mkdirSync(path.dirname(dst), { recursive: true });
-        fs.renameSync(path.join(stage, rel), dst);
-      } catch (_) {}
-    }
-    fs.rmSync(stage, { recursive: true, force: true });
-    for (const root of CODE_ROOTS) {
-      const dir = path.join(APP_ROOT, root);
-      if (!fs.existsSync(dir)) continue;
-      const walk = (d) => {
-        for (const n of fs.readdirSync(d)) {
-          const f = path.join(d, n);
-          if (fs.statSync(f).isDirectory()) { walk(f); continue; }
-          const rel = path.relative(APP_ROOT, f).split(path.sep).join('/');
-          if (!have.has(rel)) { try { fs.unlinkSync(f); } catch (_) {} }
-        }
-      };
-      walk(dir);
-    }
-    res.json({ ok: true, installed: 'forced', message: 'Forced update installed — server restarts in 4 sec, NO close needed. Press Ctrl+F5 after 5 sec.' });
+    // v1.11.55 ROBUST: Don't copy now, let BAT copy after kill
+    fs.writeFileSync(path.join(stage, '_filelist.txt'), files.join('\n'));
+    res.json({ ok: true, installed: 'forced', message: 'Forced update staged — server restarts in 3 sec, copy after kill, NO close needed. Wait 10 sec then Ctrl+F5.' });
     setTimeout(() => {
       try {
         if (process.platform === 'win32') {
           const bat = path.join(APP_ROOT, '_apply-restart.bat');
           const batContent = [
-            '@echo off','setlocal',
-            'rem FORCED update restart v1.11.54 KEEP LIVE — NO MANUAL OFF/ON
+            '@echo off','setlocal enabledelayedexpansion',
+            'rem FORCED update restart v1.11.55 ROBUST COPY AFTER KILL',
             'cd /d "%~dp0."',
-            'echo [%date% %time%] FORCED RESTART v1.11.54 KEEP LIVE >> update-restart.log',
-            'timeout /t 3 /nobreak >nul',
+            'echo [%date% %time%] FORCED RESTART v1.11.55 ROBUST >> update-restart.log',
+            'timeout /t 2 /nobreak >nul',
             'for /f "tokens=5" %%a in (\'netstat -aon ^| findstr :8080 ^| findstr LISTENING\') do taskkill /f /pid %%a >nul 2>nul',
-            'timeout /t 1 /nobreak >nul',
+            'timeout /t 2 /nobreak >nul',
+            'echo [%date% %time%] Copying from _update_stage... >> update-restart.log',
+            'xcopy /s /y /i "_update_stage\\*" "." >> update-restart.log 2>&1',
+            'rmdir /s /q "_update_stage" >nul 2>nul',
             'if exist "dist\\index.html" (',
-            '  echo [%date% %time%] dist exists — FAST restart >> update-restart.log',
             '  start "" /b cmd /c "node server\\run.js >> server.log 2>&1"',
-            ') else if exist "node_modules\\express\\package.json" (',
-            '  start "" /b cmd /c "npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
             ') else (',
-            '  start "" /b cmd /c "npm install --no-audit --no-fund --prefer-offline >> server.log 2>&1 & npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
+            '  start "" /b cmd /c "npm run build >> server.log 2>&1 & node server\\run.js >> server.log 2>&1"',
             ')',
-            'timeout /t 3 /nobreak >nul',
+            'timeout /t 2 /nobreak >nul',
             'del "%~f0" >nul 2>nul',
             'endlocal','exit /b 0'
           ].join('\r\n');

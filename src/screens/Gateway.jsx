@@ -127,9 +127,9 @@ export function Gateway() {
         </div>
       )}
 
-      {/* ---------- TOP KPI ROW — v1.11.54 FIX: KEEP SERVER LIVE NO OFF ON + FAST DATA 5SEC + GST AUTO 18% 9+9% ---------- */}
+      {/* ---------- TOP KPI ROW — v1.11.55 FIX: ROBUST UPDATE NO FILE IN USE + KEEP LIVE + GST AUTO 18% 9+9% ---------- */}
       <div style={{ border: '1px solid var(--gold-line)', borderRadius: 6, padding: '10px 12px', marginBottom: 10, background: 'rgba(212,175,55,0.10)', fontSize: 12, color: 'var(--ink-dim)' }}>
-        <b style={{ color: 'var(--gold-hi)' }}>v1.11.54 — KEEP SERVER LIVE + FAST DATA 5SEC + GST AUTO 18% 9+9% + TAXABLE 13820.32 VERIFIED + 927956 ✓ — 73 inv 927956 verified — Amount = Invoice excl COGS:</b><br/>
+        <b style={{ color: 'var(--gold-hi)' }}>v1.11.55 — ROBUST UPDATE COPY AFTER KILL + KEEP LIVE + GST AUTO 18% 9+9% + 927956 ✓ — 73 inv 927956 verified — Amount = Invoice excl COGS:</b><br/>
         Taxable Sales = Sales ledger only (excl GST). Invoice Value incl GST = Party Dr (incl GST, excl stock valuation). Your data: 20 invoices FY25-26 = 374616, 53 invoices FY26-27 = 553340, Grand = 927956. Download <a href="/api/export/sales" style={{ color: 'var(--gold-hi)', textDecoration: 'underline' }}>Live Sales Excel (from DB)</a> to verify Invoice_Total_Incl_GST total = 927956. If figures dont match, difference is PI/Proforma excluded from stock or stock_journal not in sales. <b style={{ color: 'var(--gold)' }}>⬇ Download buttons added to ALL tabs wherever applicable.</b> Also download <a href="/templates/sales-927956-verified.xlsx" style={{ color: 'var(--gold-hi)', textDecoration: 'underline' }}>Your 927956 Verified Excel</a> and <a href="/templates/sales-927956-import-template.xlsx" style={{ color: 'var(--gold-hi)', textDecoration: 'underline' }}>Import Template (rate=taxable, GST 18% → 927956)</a>
       </div>
       <div className="kpis" style={{ marginBottom: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
