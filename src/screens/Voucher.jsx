@@ -229,11 +229,12 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
     const entry = (v.entries || []).find((e) => ['SundryDebtor', 'SundryCreditor'].includes(e.kind)) || (v.entries || [])[0];
     const hasIGST = (v.entries || []).some((e) => /IGST/.test(e.account_name || ''));
     const invTypeRaw = String(v.invoice_type || 'tax_invoice').toLowerCase();
+    const mapped = (v.items || []).map((it) => ({ name: it.item_name, qty: String(it.qty), rate: String(it.rate / 100) }));
     return {
       date: v.date, num: v.number, party: entry ? entry.account_name : '', narration: v.narration, ref: v.ref,
       regime: hasIGST ? 'inter' : 'intra',
       invoice_type: invTypeRaw === 'proforma' || String(v.number||'').toUpperCase().startsWith('PI-') ? 'proforma' : 'tax_invoice',
-      rows: (v.items || []).map((it) => ({ name: it.item_name, qty: String(it.qty), rate: String(it.rate / 100) })),
+      rows: mapped.length ? mapped : [{ name: '', qty: '1', rate: '' }],
     };
   };
   const init = initFrom(editing);
@@ -591,7 +592,7 @@ export function VoucherScreen({ cls }) {
                     <td className="no-print" style={{ whiteSpace: 'nowrap' }}>
                       <button className="btn ghost sm" onClick={() => setViewId(v.id)}>View</button>{' '}
                       <button className="btn ghost sm" onClick={async () => {
-                        try { const j = await api('/vouchers/' + v.id); setEditing(j.voucher); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                        try { const j = await api('/vouchers/' + v.id); setEditing(j.voucher); setUseItems(true); setSalesMode('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
                         catch (e) { notify(e.message); }
                       }}>Edit</button>{' '}
                       <button className="btn danger sm" onClick={() => del(v.id)}>✕</button>
@@ -603,7 +604,7 @@ export function VoucherScreen({ cls }) {
           </div>
         )}
       </div>
-      {viewId && <VoucherModal voucherId={viewId} onClose={() => setViewId(null)} onDeleted={load} onEdit={(v) => { setEditing(v); window.scrollTo(0, 0); }} />}
+      {viewId && <VoucherModal voucherId={viewId} onClose={() => setViewId(null)} onDeleted={load} onEdit={(v) => { setEditing(v); setUseItems(true); setSalesMode('form'); window.scrollTo(0, 0); }} />}
     </div>
   );
 }
