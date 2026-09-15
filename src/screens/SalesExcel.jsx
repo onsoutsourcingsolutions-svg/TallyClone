@@ -69,7 +69,11 @@ export function SalesExcelPanel({ accounts, items, onSaved }) {
       const amt = q * rate;
       if (amt <= 0) return;
       taxable += amt;
-      const g = r.gst !== '' ? Number(r.gst) : (it ? Number(it.gst_rate) : 0);
+      // v1.11.53 FIX: GST auto-calculated default 18% or 9+9% based on debtor
+      let g = 18;
+      if (r.gst !== '' && r.gst != null) g = Number(r.gst);
+      else if (it && it.gst_rate != null && Number(it.gst_rate) > 0) g = Number(it.gst_rate);
+      else g = 18;
       if (g > 0) tax += Math.round(amt * g / 100);
     });
     return { taxable: Math.round(taxable * 100), tax: Math.round(tax * 100), total: Math.round((taxable + tax) * 100) };

@@ -255,7 +255,7 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
   const [rows, setRows] = useState(init.rows);
   const [err, setErr] = useState('');
 
-  // auto-detect proforma from number PI- prefix
+  // auto-detect proforma from number PI- prefix + GST regime from debtor GSTIN vs company state (default 18% = 9+9)
   useEffect(() => {
     const up = String(num || '').toUpperCase();
     if (up.startsWith('PI-') || up.startsWith('PI/') || up.includes('PROFORMA')) {
@@ -263,19 +263,49 @@ export function InvoiceEditor({ cls, accounts, items, editing, onSaved }) {
     }
   }, [num]);
 
+  // v1.11.53 FIX: GST auto-calculated, default 18% or 9+9% based on debtor — intra if same state else inter
+  useEffect(() => {
+    if (!party) return;
+    const acc = partyMap[party.trim().toLowerCase()];
+    if (!acc) return;
+    // GSTIN first 2 digits = state code
+    const compState = String(company.state_code || company.extras?.state_code || '').padStart(2,'0');
+    let partyState = '';
+    if (acc.gstin && String(acc.gstin).length >= 2) {
+      partyState = String(acc.gstin).slice(0,2);
+    } else if (acc.state_code) {
+      partyState = String(acc.state_code).padStart(2,'0');
+    }
+    if (compState && partyState) {
+      if (compState === partyState) {
+        if (regime !== 'intra') setRegime('intra');
+      } else {
+        if (regime !== 'inter') setRegime('inter');
+      }
+    }
+    // If no GSTIN, keep existing regime but default to intra (9+9)
+  }, [party]);
+
   const compute = () => {
     let taxable = 0;
     const tax = { CGST: 0, SGST: 0, IGST: 0 };
-    const details = []; // per row for CGST/SGST verification
+    const details = [];
     rows.forEach((r) => {
       const it = itemMap[r.name.trim().toLowerCase()];
-      // v1.11.51 FIX: CGST/SGST calculated wrong — support GST% override per row + accurate 0.068 calc
+      // v1.11.53 FIX: GST auto-calculated default 18% or 9+9% based on debtor — taxable qty*rate, GST auto
       const qty = Number(r.qty || 0);
       const rate = Number(r.rate || 0);
       const p = Math.round(qty * rate * 100); // paise
       taxable += p;
-      // GST% can be overridden per row (e.g., 5% OR item), else from master
-      const g = r.gst !== '' && r.gst != null ? Number(r.gst) : (it ? Number(it.gst_rate) : 0);
+      // GST% override > item master > default 18% (9+9)
+      let g = 18;
+      if (r.gst !== '' && r.gst != null) {
+        g = Number(r.gst);
+      } else if (it && it.gst_rate != null && Number(it.gst_rate) > 0) {
+        g = Number(it.gst_rate);
+      } else {
+        g = 18; // default 18% = 9+9
+      }
       if (g > 0 && p > 0) {
         if (regime === 'intra') {
           const t = Math.round(p * g / 100);

@@ -326,9 +326,16 @@ function buildInvoice(c, vid, payload) {
     if (!item) throw vErr(`Item #${it.item_id} not found.`);
     const qty = Number(it.qty);
     const rateNum = Number(it.rate);
-    // v1.11.51 FIX: CGST/SGST wrong + 0.068*200000 fix — support gst_rate override per row (5% OR item)
+    // v1.11.53 FIX: GST auto-calculated default 18% or 9+9% based on debtor — taxable qty*rate, GST auto
     const gstOverride = it.gst_rate !== undefined && it.gst_rate !== '' && it.gst_rate !== null ? Number(it.gst_rate) : null;
-    const gstRate = gstOverride != null && Number.isFinite(gstOverride) ? gstOverride : Number(item.gst_rate || 0);
+    let gstRate = 18; // default 18% = 9+9% intra, 18% inter
+    if (gstOverride != null && Number.isFinite(gstOverride)) {
+      gstRate = gstOverride;
+    } else if (item.gst_rate != null && Number(item.gst_rate) > 0) {
+      gstRate = Number(item.gst_rate);
+    } else {
+      gstRate = 18; // default
+    }
     if (gstRate < 0 || gstRate > 100) throw vErr(`Item "${item.name}": GST% must be 0-100.`);
     if (!(qty > 0)) throw vErr(`Item "${item.name}": enter quantity.`);
     if (!(rateNum > 0)) throw vErr(`Item "${item.name}": enter rate.`);
