@@ -1,4 +1,4 @@
 // One place that marks which build of the app is running.
 // Both the server banner and the web screens show this, so you can verify
 // that an update has really landed (Settings -> bottom of the page).
-export const BUILD_TAG = 'v1.11.46 · 15 Sep 2026 — SALES 927956 MATCHED + DOWNLOAD ALL TABS + RECONCILIATION EXCEL + PI NO STOCK + ESC BACK';
+export const BUILD_TAG = 'v1.11.47 · 15 Sep 2026 — SALES EDIT FIX + COGS EXCLUDED + 927956 VERIFIED + PI NO STOCK EDITABLE';

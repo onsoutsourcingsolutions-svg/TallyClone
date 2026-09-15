@@ -245,9 +245,20 @@ const RETURN_CLASSES = new Set(['credit_note', 'debit_note']);
 function openVoucherRow(c, payload, vid) {
   const date = payload.date || todayISO();
   const now = todayISO();
-  const invType = String(payload.invoice_type || payload.invoiceType || 'tax_invoice').toLowerCase() === 'proforma' || String(payload.invoice_type || '').toUpperCase().includes('PROFORMA') || String(payload.number||'').toUpperCase().startsWith('PI-') ? (String(payload.invoice_type||'').toLowerCase().includes('proforma') || String(payload.number||'').toUpperCase().startsWith('PI-') ? 'proforma' : 'tax_invoice') : String(payload.invoice_type || 'tax_invoice').toLowerCase();
-  // Normalize: only tax_invoice affects stock, everything else is non-stock
-  const normalizedType = (invType === 'tax_invoice' || invType === 'tax') ? 'tax_invoice' : 'proforma';
+  // v1.11.47 FIX: clean normalization — only tax_invoice affects stock, everything else proforma (no stock) but still stores items for editing
+  let rawType = String(payload.invoice_type || payload.invoiceType || 'tax_invoice').toLowerCase().trim();
+  const numUpper = String(payload.number || '').toUpperCase();
+  const isProformaByNumber = numUpper.startsWith('PI-') || numUpper.startsWith('PI/') || numUpper.includes('PROFORMA') || numUpper.includes('QUOTATION') || numUpper.includes('ESTIMATE') || numUpper.startsWith('QT-') || numUpper.startsWith('EST-');
+  if (isProformaByNumber) rawType = 'proforma';
+  // Normalize
+  let normalizedType = 'tax_invoice';
+  if (rawType === 'proforma' || rawType === 'pi' || rawType.includes('proforma') || rawType.includes('quotation') || rawType.includes('estimate') || rawType === 'quotation' || rawType === 'estimate') {
+    normalizedType = 'proforma';
+  } else if (rawType === 'tax_invoice' || rawType === 'tax' || rawType === 'invoice') {
+    normalizedType = 'tax_invoice';
+  } else {
+    normalizedType = rawType === 'proforma' ? 'proforma' : 'tax_invoice';
+  }
   if (vid) {
     const exists = db.prepare('SELECT * FROM vouchers WHERE id = ? AND company_id = ?').get(vid, c.id);
     if (!exists) throw vErr('Voucher not found.', 404);
@@ -888,38 +899,36 @@ export function dashboard(c) {
   aging.sort((a, b) => b.daysInStock - a.daysInStock);
   const oldStock = aging.slice(0, 10);
 
-  // sales / purchase totals — v1.11.41 FIX: stock import (stock_journal) must NOT inflate sales, only sales group
-  // taxable sales (sales ledger credit - debit)
+  // v1.11.47 FIX: Only TAX INVOICE counts in sales & stock, PI/PROFORMA excluded — figures in sale should NOT include COGS (is_stock filtered via group, not debit)
   const salesRows = db.prepare(`
     SELECT SUM(e.credit - e.debit) AS total FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id
-    WHERE e.company_id = ? AND v.active = 1 AND a.group_code IN ('sales','income_direct') AND v.date BETWEEN ? AND ?
+    WHERE e.company_id = ? AND v.active = 1 AND a.group_code IN ('sales','income_direct') AND v.date BETWEEN ? AND ? AND v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI/%' AND UPPER(COALESCE(v.number,'')) NOT LIKE '%PROFORMA%'
   `).get(c.id, monthFrom, asOn);
   const salesMonth = Number(salesRows?.total || 0);
 
   const salesFYRows = db.prepare(`
     SELECT SUM(e.credit - e.debit) AS total FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id
-    WHERE e.company_id = ? AND v.active = 1 AND a.group_code IN ('sales','income_direct') AND v.date BETWEEN ? AND ?
+    WHERE e.company_id = ? AND v.active = 1 AND a.group_code IN ('sales','income_direct') AND v.date BETWEEN ? AND ? AND v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI/%' AND UPPER(COALESCE(v.number,'')) NOT LIKE '%PROFORMA%'
   `).get(c.id, fyFrom, fyEndDate);
   const salesFY = Number(salesFYRows?.total || 0);
 
-  // v1.11.41: invoice value including GST — sum of party Dr for sales minus Cr for credit notes
-  // This is what user expects as total sales 927954 — invoice total, not just taxable
+  // v1.11.47: invoice value including GST — only TAX INVOICE, excl COGS (sundry_debtors only, not is_stock)
   const salesInvMonthRow = db.prepare(`
     SELECT SUM(CASE WHEN v.class='sales' THEN e.debit - e.credit WHEN v.class='credit_note' THEN e.credit - e.debit ELSE 0 END) AS total
     FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id
-    WHERE e.company_id = ? AND v.active = 1 AND v.class IN ('sales','credit_note') AND a.group_code='sundry_debtors' AND v.date BETWEEN ? AND ?
+    WHERE e.company_id = ? AND v.active = 1 AND v.class IN ('sales','credit_note') AND a.group_code='sundry_debtors' AND v.date BETWEEN ? AND ? AND v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%'
   `).get(c.id, monthFrom, asOn);
   const salesInvoiceMonth = Number(salesInvMonthRow?.total || 0);
 
   const salesInvFYRow = db.prepare(`
     SELECT SUM(CASE WHEN v.class='sales' THEN e.debit - e.credit WHEN v.class='credit_note' THEN e.credit - e.debit ELSE 0 END) AS total
     FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id
-    WHERE e.company_id = ? AND v.active = 1 AND v.class IN ('sales','credit_note') AND a.group_code='sundry_debtors' AND v.date BETWEEN ? AND ?
+    WHERE e.company_id = ? AND v.active = 1 AND v.class IN ('sales','credit_note') AND a.group_code='sundry_debtors' AND v.date BETWEEN ? AND ? AND v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%'
   `).get(c.id, fyFrom, fyEndDate);
   const salesInvoiceFY = Number(salesInvFYRow?.total || 0);
 
-  const salesCountMonth = db.prepare(`SELECT COUNT(*) AS cnt FROM vouchers v WHERE v.company_id=? AND v.active=1 AND v.class='sales' AND v.date BETWEEN ? AND ?`).get(c.id, monthFrom, asOn);
-  const salesCountFY = db.prepare(`SELECT COUNT(*) AS cnt FROM vouchers v WHERE v.company_id=? AND v.active=1 AND v.class='sales' AND v.date BETWEEN ? AND ?`).get(c.id, fyFrom, fyEndDate);
+  const salesCountMonth = db.prepare(`SELECT COUNT(*) AS cnt FROM vouchers v WHERE v.company_id=? AND v.active=1 AND v.class='sales' AND v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%' AND v.date BETWEEN ? AND ?`).get(c.id, monthFrom, asOn);
+  const salesCountFY = db.prepare(`SELECT COUNT(*) AS cnt FROM vouchers v WHERE v.company_id=? AND v.active=1 AND v.class='sales' AND v.invoice_type='tax_invoice' AND UPPER(COALESCE(v.number,'')) NOT LIKE 'PI-%' AND v.date BETWEEN ? AND ?`).get(c.id, fyFrom, fyEndDate);
 
   const purchRows = db.prepare(`
     SELECT SUM(e.debit - e.credit) AS total FROM entries e JOIN accounts a ON a.id = e.account_id JOIN vouchers v ON v.id = e.voucher_id

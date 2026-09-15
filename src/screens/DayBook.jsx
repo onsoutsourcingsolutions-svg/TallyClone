@@ -19,7 +19,7 @@ export function DayBookScreen({ focusId }) {
     if (focusId) { setViewId(focusId); setView && setView({ name: 'daybook' }); }
   }, [focusId]);
   useEffect(() => { load().catch((e) => notify(e.message)); }, [from, to, cls]);
-  const total = (rows || []).reduce((s, r) => ({ dr: s.dr + r.debit, cr: s.cr + r.credit }), { dr: 0, cr: 0 });
+  const total = (rows || []).reduce((s, r) => ({ dr: s.dr + (r.invoice_total || r.debit), cr: s.cr + (r.invoice_total || r.credit), drFull: s.drFull + r.debit, crFull: s.crFull + r.credit }), { dr: 0, cr: 0, drFull: 0, crFull: 0 });
   return (
     <div>
       <div className="pagetitle">
@@ -57,14 +57,14 @@ export function DayBookScreen({ focusId }) {
                     <td className="num">{dshort(v.date)}</td>
                     <td><b>{(CLASSES[v.class] || {}).label || v.class}</b></td>
                     <td className="num">{v.number || ('#' + v.voucher_no)}</td>
-                    <td className="muted">{v.narration}</td>
-                    <td className="tright num">{inr(v.debit)}</td>
-                    <td className="tright num">{inr(v.credit)}</td>
+                    <td className="muted">{v.narration}{v.invoice_total && v.invoice_total!==v.debit ? <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}> — invoice excl COGS {inr(v.invoice_total)}</span> : ''}</td>
+                    <td className="tright num" title={v.invoice_total ? `Invoice excl COGS, debit incl COGS was ${inr(v.debit)}` : ''}>{inr(v.invoice_total || v.debit)}</td>
+                    <td className="tright num">{inr(v.invoice_total || v.credit)}</td>
                     <td className="no-print"><button className="btn ghost sm">View</button></td>
                   </tr>
                 ))}
                 <tr className="gtotal">
-                  <td colSpan={4}>Total ({rows.length} vouchers)</td>
+                  <td colSpan={4}>Total ({rows.length} vouchers) — excl COGS {inr(total.dr)} | incl COGS {inr(total.drFull)}</td>
                   <td className="tright num">{inr(total.dr)}</td>
                   <td className="tright num">{inr(total.cr)}</td>
                   <td></td>

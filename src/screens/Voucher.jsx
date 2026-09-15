@@ -587,7 +587,7 @@ export function VoucherScreen({ cls }) {
                     <td className="num">{v.number || ('#' + v.voucher_no)}</td>
                     <td className="num">{dshort(v.date)}</td>
                     <td className="muted">{v.ref ? v.ref + ' · ' : ''}{v.narration}</td>
-                    <td className="tright num">{inr(v.debit)}</td>
+                    <td className="tright num" title={v.invoice_total ? `Invoice incl GST excl COGS: ${v.invoice_total/100} — debit incl COGS was ${v.debit/100}` : ''}>{inr(v.invoice_total || v.debit)}{v.invoice_total && v.debit!==v.invoice_total ? <span style={{ fontSize: 10, color: 'var(--ink-faint)' }}> (excl COGS)</span> : ''}</td>
                     <td className="no-print" style={{ whiteSpace: 'nowrap' }}>
                       <button className="btn ghost sm" onClick={() => setViewId(v.id)}>View</button>{' '}
                       <button className="btn ghost sm" onClick={async () => {
